@@ -175,7 +175,8 @@ public class SampleChallenge : Challenge
         this.hidden = (array[3] == "1");
         this.revealed = (array[4] == "1");
 
-        //The changes we register on a player's death might not be saved directly into the string; we must manually check and set them here.
+        //Remember: challenge states are ONLY saved when the player hibernates, not when they die. We must check if they died last time and update our state accordingly.
+        //TO-DO: Method to check how many deaths in a row there were without a successful hibernation.
         if (ExpeditionsExpandedMod.DiedLastSession())    //DiedLastSession() will return true if the last cycle of the expedition was a death.
             deathlessGoalProgression = 0;
 
