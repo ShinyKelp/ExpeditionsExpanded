@@ -38,6 +38,7 @@ namespace ExpeditionsExpanded
 
         public static UnityAction OnHibernated;
 
+        internal static Dictionary<string, string> LapChallengeRegions;
         private void OnEnable()
         {
             On.RainWorld.OnModsInit += RainWorldOnOnModsInit;
@@ -58,11 +59,32 @@ namespace ExpeditionsExpanded
                 On.RainWorldGame.GoToDeathScreen += RainWorldGame_GoToDeathScreen;
                 On.RainWorldGame.GoToStarveScreen += RainWorldGame_GoToStarveScreen;
                 On.Menu.CharacterSelectPage.AbandonButton_OnPressDone += CharacterSelectPage_AbandonButton_OnPressDone;
-
+                On.RainWorldGame.ShutDownProcess += RainWorldGame_ShutDownProcess;
                 //On.Expedition.ExpeditionCoreFile.FromString += ExpeditionCoreFile_FromString; //This is used for debugging ONLY
 
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded");
+                if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal"))
+                    Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal");
+
+                LapChallengeRegions = new Dictionary<string, string>();
+                string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/LapChallenge.txt";
+                if (File.Exists(filePath))
+                {
+                    StreamReader r = new StreamReader(filePath);
+                    string line;
+                    while((line = r.ReadLine()) != null)
+                    {
+                        string[] array = Regex.Split(line,",,");
+                        if(array.Length == 2)
+                        {
+                            LapChallengeRegions.Add(array[0], array[1]);
+                            UnityEngine.Debug.Log("Adding: " + array[0] + " " + array[1]);
+                        }
+                    }
+                    r.Close();
+                }
+
                 ExpLogger = Logger;
 
                 IsInit = true;
@@ -72,6 +94,12 @@ namespace ExpeditionsExpanded
                 Logger.LogError(ex);
                 throw;
             }
+        }
+
+        private void RainWorldGame_ShutDownProcess(On.RainWorldGame.orig_ShutDownProcess orig, RainWorldGame self)
+        {
+            LapChallengeRegions.Clear();
+            orig(self);
         }
 
         #region Challenge Filters
@@ -165,7 +193,7 @@ namespace ExpeditionsExpanded
 
         private void SaveFilterSelection(Menu.FilterDialog menuDialog)
         {
-            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/DisabledChallenges.txt";
+            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/DisabledChallenges.txt";
 
             using (StreamWriter writer = new StreamWriter(filePath, false))
             {
@@ -183,9 +211,9 @@ namespace ExpeditionsExpanded
 
         private void LoadFilterSelection(Menu.FilterDialog menuDialog)
         {
-            if (File.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/DisabledChallenges.txt"))
+            if (File.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/DisabledChallenges.txt"))
             {
-                StreamReader sr = new StreamReader(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/DisabledChallenges.txt");
+                StreamReader sr = new StreamReader(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/DisabledChallenges.txt");
                 HashSet<string> disabledChallenges = Regex.Split(sr.ReadToEnd(), "><").ToHashSet<string>();
                 sr.Close();
                 for (int i = 0; i < menuDialog.checkBoxes.Count; ++i)
@@ -210,9 +238,9 @@ namespace ExpeditionsExpanded
                 Expedition.ChallengeOrganizer.filterChallengeTypes = new List<string>();
             if (Expedition.ChallengeOrganizer.filterChallengeTypes.Count == 0)
             {
-                if (File.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/DisabledChallenges.txt"))
+                if (File.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/DisabledChallenges.txt"))
                 {
-                    StreamReader sr = new StreamReader(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/DisabledChallenges.txt");
+                    StreamReader sr = new StreamReader(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/DisabledChallenges.txt");
                     HashSet<string> disabledChallenges = Regex.Split(sr.ReadToEnd(), "><").ToHashSet<string>();
                     sr.Close();
 
@@ -643,7 +671,7 @@ namespace ExpeditionsExpanded
         private void RecordDeath()
         {
             string slugcatPlayer = ExpeditionData.slugcatPlayer.ToString();
-            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/" + slugcatPlayer + ".txt";
+            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/" + slugcatPlayer + ".txt";
             if (!File.Exists(filePath))
                 File.Create(filePath);
         }
@@ -651,21 +679,20 @@ namespace ExpeditionsExpanded
         public static bool DiedLastSession()
         {
             string slugcatPlayer = ExpeditionData.slugcatPlayer.ToString();
-            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/" + slugcatPlayer + ".txt";
+            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/" + slugcatPlayer + ".txt";
             return File.Exists(filePath);
         }
 
         private void ResetDeathRecords()
         {
             string slugcatPlayer = ExpeditionData.slugcatPlayer.ToString();
-            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/" + slugcatPlayer + ".txt";
+            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/" + slugcatPlayer + ".txt";
             if (File.Exists(filePath))
                 File.Delete(filePath);
         }
 
         #endregion
     }
-
 
     public class GourmetChallenge : Challenge
     {
@@ -1384,6 +1411,8 @@ namespace ExpeditionsExpanded
         public override Challenge Generate()
         {
             List<string> list = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
+            foreach(string s in ExpeditionsExpandedMod.LapChallengeRegions.Keys)
+                list.Add(s);
             list.Remove("SS");
             list.Remove("OE");
             list.Remove("LC");
@@ -1434,13 +1463,23 @@ namespace ExpeditionsExpanded
             this.completed = (array[1] == "1");
             this.hidden = (array[2] == "1");
             this.revealed = (array[3] == "1");
+
+            if (!SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer).Contains(targetRegion) &&
+                !ExpeditionsExpandedMod.LapChallengeRegions.ContainsKey(targetRegion))
+                targetRegion = "SU";
+
             this.UpdateDescription();
         }
 
         public override void UpdateDescription()
         {
+            string regionName = "";
+            if(ExpeditionsExpandedMod.LapChallengeRegions.ContainsKey(targetRegion))
+                regionName = ExpeditionsExpandedMod.LapChallengeRegions[targetRegion];
+            else
+                regionName = Region.GetRegionFullName(this.targetRegion, ExpeditionData.slugcatPlayer);
             this.description = ChallengeTools.IGT.Translate("Enter <region> twice in one cycle.").Replace
-                ("<region>", ChallengeTools.IGT.Translate(Region.GetRegionFullName(this.targetRegion, ExpeditionData.slugcatPlayer)));
+                ("<region>", ChallengeTools.IGT.Translate(regionName));
             base.UpdateDescription();
         }
         
