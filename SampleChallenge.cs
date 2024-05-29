@@ -19,9 +19,20 @@ public class SampleChallenge : Challenge
     public SampleChallenge()
     {
         On.Player.ObjectEaten += Player_ObjectEaten;
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Custom event that launches when all players die in expedition.
+
+        /*
+        * The state of a challenge during a playthrough and the state of a challenge in a savefile are independent from each other.
+        * The state is only ever saved after each successful cycle.
+        * The state is only ever loaded when entering the expedition, or when clicking "Continue" in the death screen.
+        * This makes it tricky to alter progress after death, because any changes you make on death will immediately be overriden by the previous savestate.
+        * Likewise, your variables are not going to be reset and re-read from savefile upon a successful cycle, but they WILL if the player exits back to the menu and re-enters.
+        * So, to make it a lot easier to track progress, I have created two events that are called on player death and hibernation, and they ensure that variables will stay consistent    
+        * between in-game states and savefile states.
+        * Still, some manual tracking will be required (see FromString method)
+        */
+        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Called when all players die in expedition.
                                                                                         //Recommended to use for progress reset on death.
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated += Hibernated;  //Custom event that launches on an expedition's successful hibernation.
+        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated += Hibernated;  //Called when player hibernates successfully.
                                                                                 //Recommended to use for progress or variable reset on cycle end.
 
         //Recommended to initialize your variables here, most importantly those that are not saved in savefiles.
@@ -79,7 +90,7 @@ public class SampleChallenge : Challenge
     private void Hibernated()
     {
         if(!completed)
-            cycleGoalProgression = 0;
+            cycleGoalProgression = 0;    //Reset progress at cycle end.
         UpdateDescription();
     }
 
@@ -132,6 +143,7 @@ public class SampleChallenge : Challenge
 
     //Used to save the challenge in savefile, in string format.
     //IMPORTANT: Be EXTREMELY careful with the formatting. A faulty format can corrupt a save file!
+    //Note: Variables that you intend to reset on hibernation do not need to be added here.
     public override string ToString()
     {
         return string.Concat(new string[]
@@ -140,7 +152,7 @@ public class SampleChallenge : Challenge
                 "~",
                 ValueConverter.ConvertToString<int>(this.goalToReach),
                 "><",                                                               //Use '><' as separator to differentiate variables.
-                ValueConverter.ConvertToString<int>(this.deathlessGoalProgression), //Variables that are reset every cycle do not need to be saved here.
+                ValueConverter.ConvertToString<int>(this.deathlessGoalProgression), //Variables that are not 100% reset every cycle need to be included here.
                 "><",
                 this.completed ? "1" : "0",                                         //Always include these three. You can use a different format if you want,
                 "><",                                                               //but keep it in mind in FromString.
@@ -164,7 +176,7 @@ public class SampleChallenge : Challenge
         this.revealed = (array[4] == "1");
 
         //The changes we register on a player's death might not be saved directly into the string; we must manually check and set them here.
-        if (ExpeditionsExpandedMod.DiedLastSession())
+        if (ExpeditionsExpandedMod.DiedLastSession())    //DiedLastSession() will return true if the last cycle of the expedition was a death.
             deathlessGoalProgression = 0;
 
         this.UpdateDescription();
