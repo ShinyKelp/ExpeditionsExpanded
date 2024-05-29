@@ -18,7 +18,6 @@ public class SampleChallenge : Challenge
     //In Constructor, hook to any methods you want
     public SampleChallenge()
     {
-        On.ShelterDoor.Close += ShelterDoor_Close;  //This is a good hook to check when a player is about to hibernate.
         On.Player.ObjectEaten += Player_ObjectEaten;
         ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Custom event that launches when all players die in expedition.
                                                                                         //Recommended to use for progress reset on death.
@@ -53,13 +52,15 @@ public class SampleChallenge : Challenge
             {
                 cycleGoalProgression++;
                 if (cycleGoalProgression == goalToReach)
-                    CompleteChallenge();
-                UpdateDescription();
+                    CompleteChallenge();    //This function will complete the challenge successfully.
+                                            //Completion will not persist if the player does not hibernate.
+                UpdateDescription();        //This function should be called whenever the state of the challenge changes (progress is made or lost)
             }
         }
         catch (Exception e)
         {
-        }
+            ExpeditionsExpanded.ExpeditionsExpandedMod.ExpLogger.LogError(e);   //ExpeditionsExpanded provides a Logger if you don't want to
+        }                                                                       //have an actual plugin in your mod.
         finally
         {
             orig(self, edible);
@@ -121,8 +122,8 @@ public class SampleChallenge : Challenge
     //Called whenever a new challenge of this type has to be created.
     public override Challenge Generate()
     {
-        float difficulty = ExpeditionData.challengeDifficulty;  //Player difficulty. Goes from 0f to 1f inclusive.
-        int thisToReach = 2 + (int)difficulty * 10;
+        float difficulty = ExpeditionData.challengeDifficulty;  //Difficulty slider of expedition menu. Goes from 0f to 1f inclusive.
+        int thisToReach = 2 + (int)(difficulty * 10);
         return new SampleChallenge
         {
             goalToReach = thisToReach
@@ -141,8 +142,8 @@ public class SampleChallenge : Challenge
                 "><",                                                               //Use '><' as separator to differentiate variables.
                 ValueConverter.ConvertToString<int>(this.deathlessGoalProgression), //Variables that are reset every cycle do not need to be saved here.
                 "><",
-                this.completed ? "1" : "0",                                         //Always include these three.
-                "><",
+                this.completed ? "1" : "0",                                         //Always include these three. You can use a different format if you want,
+                "><",                                                               //but keep it in mind in FromString.
                 this.hidden ? "1" : "0",
                 "><",
                 this.revealed ? "1" : "0"
@@ -229,7 +230,7 @@ public class SampleChallenge : Challenge
     /*
      *  And that's more or less it! There are a couple more functions you can override from base Challenge,
      *  but those are optional (techically, all functions except ToString/FromString are optional).
-     *  You can check out the mod's actually implemented challenges, or the base game challenges to get 
+     *  You can check out Expeditions Expanded's challenges or the base game challenges to get 
      *  more insight about coding new challenges!
      *  (Here's a tip: don't start from scratch. Copy-paste an existing challenge and modify from there.
      *  Trust me it'll save you a lot of effort)
