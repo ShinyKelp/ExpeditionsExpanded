@@ -1331,7 +1331,7 @@ namespace ExpeditionsExpanded
                 this.description = ChallengeTools.IGT.Translate("Steal from two tolls without killing, paying or chieftain [<score>/2]").Replace("<score>", (heistedRegion == "_" ? "0" : (completed? "2" : "1")));
             }
             else
-                this.description = ChallengeTools.IGT.Translate("Steal from OnAllPlayersDied toll without killing, paying or chieftain");
+                this.description = ChallengeTools.IGT.Translate("Steal from a scav toll without killing, paying or chieftain");
             base.UpdateDescription();
         }
         public override int Points()
@@ -1818,7 +1818,7 @@ namespace ExpeditionsExpanded
             if (this.offeringType.Index >= 0)
                 critName = ChallengeTools.IGT.Translate(offeringType.ToString());
 
-            this.description = ChallengeTools.IGT.Translate("Offer one <creature> alive to OnAllPlayersDied Leviathan.")
+            this.description = ChallengeTools.IGT.Translate("Offer one <creature> alive to a Leviathan.")
                 .Replace("<creature>", critName);
                 
             base.UpdateDescription();
