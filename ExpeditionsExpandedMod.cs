@@ -20,6 +20,8 @@ using System.IO;
 using IntVector2 = RWCustom.IntVector2;
 using Custom = RWCustom.Custom;
 using UnityEngine.Events;
+using MonoMod.Cil;
+using Mono.Cecil.Cil;
 
 #pragma warning disable CS0618
 
@@ -28,7 +30,7 @@ using UnityEngine.Events;
 
 namespace ExpeditionsExpanded
 {
-    [BepInPlugin("ShinyKelp.ExpeditionsExpanded", "ExpeditionsExpanded", "0.1.0")]
+    [BepInPlugin("ShinyKelp.ExpeditionsExpanded", "ExpeditionsExpanded", "0.1.1")]
 
     public class ExpeditionsExpandedMod : BaseUnityPlugin
     {
@@ -53,6 +55,7 @@ namespace ExpeditionsExpanded
                 if (IsInit) return;
 
                 On.Expedition.ChallengeOrganizer.RandomChallenge += ChallengeOrganizer_RandomChallenge;
+                On.Menu.ExpeditionMenu.Singal += ExpeditionMenu_Singal;
                 On.Menu.FilterDialog.ctor += FilterDialog_ctor;
                 On.Menu.FilterDialog.Singal += FilterDialog_Singal;
                 On.WinState.CycleCompleted += WinState_CycleCompleted;
@@ -60,6 +63,7 @@ namespace ExpeditionsExpanded
                 On.RainWorldGame.GoToStarveScreen += RainWorldGame_GoToStarveScreen;
                 On.Menu.CharacterSelectPage.AbandonButton_OnPressDone += CharacterSelectPage_AbandonButton_OnPressDone;
                 On.RainWorldGame.ShutDownProcess += RainWorldGame_ShutDownProcess;
+                IL.Menu.FilterDialog.ctor += FilterDialog_ctorIL;
                 //On.Expedition.ExpeditionCoreFile.FromString += ExpeditionCoreFile_FromString; //This is used for debugging ONLY
 
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
@@ -109,86 +113,124 @@ namespace ExpeditionsExpanded
         private int currentPageIndex;
         private int totalPages;
 
+        private bool ignoreDialogHooks = false;
+        private void ExpeditionMenu_Singal(On.Menu.ExpeditionMenu.orig_Singal orig, Menu.ExpeditionMenu self, Menu.MenuObject sender, string message)
+        {
+            ignoreDialogHooks = message == "SETTINGS"; //Checks if dialog is from ExpeditionRegionSupport, instead of base game's filter dialog.
+            orig(self, sender, message);
+        }
+
         private void FilterDialog_Singal(On.Menu.FilterDialog.orig_Singal orig, Menu.FilterDialog self, Menu.MenuObject sender, string message)
         {
-            if (message.StartsWith("EXP_CH_FILTER_"))
+            if (!ignoreDialogHooks)
             {
+                if (message.StartsWith("EXP_CH_FILTER_"))
+                {
 
-                int previousStartingIndex = currentPageIndex * 11;
-                for (int i = previousStartingIndex; i < previousStartingIndex + 11; ++i)
-                {
-                    if (i >= self.checkBoxes.Count)
-                        break;
-                    self.checkBoxes[i].pos.x = -200;
-                    self.checkBoxes[i].lastPos.x = -200;
-                    self.checkBoxes[i].inactive = true;
-                    self.challengeTypes[i].pos.x = -200;
-                    self.challengeTypes[i].lastPos.x = -200;
-                }
-                if (message == "EXP_CH_FILTER_LEFT")
-                {
-                    currentPageIndex--;
-                    if (currentPageIndex < 0)
-                        currentPageIndex = totalPages - 1;
-                }
-                else if (message == "EXP_CH_FILTER_RIGHT")
-                {
-                    currentPageIndex++;
-                    if (currentPageIndex == totalPages)
-                        currentPageIndex = 0;
-                }
-                int nextStartingIndex = currentPageIndex * 11;
-                for (int i = 0; i < 11; ++i)
-                {
-                    if (i + nextStartingIndex >= self.checkBoxes.Count)
-                        break;
-                    self.checkBoxes[i + nextStartingIndex].pos = challengeCheckboxPositions[i];
-                    self.checkBoxes[i + nextStartingIndex].lastPos = challengeCheckboxPositions[i];
-                    self.checkBoxes[i + nextStartingIndex].inactive = false;
-                    self.challengeTypes[i + nextStartingIndex].pos = challengeLabelPositions[i];
-                    self.challengeTypes[i + nextStartingIndex].lastPos = challengeLabelPositions[i];
-                }
+                    int previousStartingIndex = currentPageIndex * 10;
+                    for (int i = previousStartingIndex; i < previousStartingIndex + 10; ++i)
+                    {
+                        if (i >= self.checkBoxes.Count)
+                            break;
+                        self.checkBoxes[i].pos.x = -200;
+                        self.checkBoxes[i].lastPos.x = -200;
+                        self.checkBoxes[i].inactive = true;
+                        self.challengeTypes[i].pos.x = -200;
+                        self.challengeTypes[i].lastPos.x = -200;
+                    }
+                    if (message == "EXP_CH_FILTER_LEFT")
+                    {
+                        currentPageIndex--;
+                        if (currentPageIndex < 0)
+                            currentPageIndex = totalPages - 1;
+                    }
+                    else if (message == "EXP_CH_FILTER_RIGHT")
+                    {
+                        currentPageIndex++;
+                        if (currentPageIndex == totalPages)
+                            currentPageIndex = 0;
+                    }
+                    int nextStartingIndex = currentPageIndex * 10;
+                    for (int i = 0; i < 10; ++i)
+                    {
+                        if (i + nextStartingIndex >= self.checkBoxes.Count)
+                            break;
+                        self.checkBoxes[i + nextStartingIndex].pos = challengeCheckboxPositions[i];
+                        self.checkBoxes[i + nextStartingIndex].lastPos = challengeCheckboxPositions[i];
+                        self.checkBoxes[i + nextStartingIndex].inactive = false;
+                        self.challengeTypes[i + nextStartingIndex].pos = challengeLabelPositions[i];
+                        self.challengeTypes[i + nextStartingIndex].lastPos = challengeLabelPositions[i];
+                    }
 
-            }
-            else if (message == "CLOSE")
-            {
-                SaveFilterSelection(self);
+                }
+                else if (message == "CLOSE")
+                {
+                    SaveFilterSelection(self);
+                }
             }
             orig(self, sender, message);
+        }
+
+        //Only keep up to 10 dividers
+        private void FilterDialog_ctorIL(MonoMod.Cil.ILContext il)
+        {
+            ILCursor c = new ILCursor(il);
+
+            //if (j == list.Count - 1)
+            c.GotoNext(MoveType.After,
+                  x => x.MatchLdloc(6),
+                x => x.MatchLdloc(3),
+                x => x.Match(OpCodes.Callvirt),
+                x => x.MatchLdcI4(1),
+                x => x.MatchSub());
+
+            //if (j > list.Count - 1)
+            c.GotoNext(MoveType.After,
+                x => x.MatchLdloc(6),
+                x => x.MatchLdloc(3),
+                x => x.Match(OpCodes.Callvirt),
+                x => x.MatchLdcI4(1),
+                x => x.MatchSub()
+                );
+            c.EmitDelegate<Func<int, int>>((count) =>
+            {
+                return Math.Min(count, 10);
+            });
         }
 
         private void FilterDialog_ctor(On.Menu.FilterDialog.orig_ctor orig, Menu.FilterDialog self, ProcessManager manager, Menu.ChallengeSelectPage owner)
         {
             orig(self, manager, owner);
+            if (ignoreDialogHooks)
+                return;
             LoadFilterSelection(self);
 
-            //OpScrollBox challengeScroller = new Menu.Remix.MixedUI.OpScrollBox(new Vector2(553f, 590f), new Vector2(380f, 420f), 800, false, false, true);
             buttonLeft = new Menu.BigArrowButton(self, self.pages[0], "EXP_CH_FILTER_LEFT", new Vector2(453f, 360f), -1);
             buttonRight = new Menu.BigArrowButton(self, self.pages[0], "EXP_CH_FILTER_RIGHT", new Vector2(853f, 360f), 1);
             self.pages[0].subObjects.Add(buttonLeft);
             self.pages[0].subObjects.Add(buttonRight);
 
-            challengeCheckboxPositions = new Vector2[11];
-            challengeLabelPositions = new Vector2[11];
-            for (int i = 0; i < 11; ++i)
+            challengeCheckboxPositions = new Vector2[10];
+            challengeLabelPositions = new Vector2[10];
+            for (int i = 0; i < 10; ++i)
             {
                 challengeCheckboxPositions[i] = self.checkBoxes[i].pos;
                 challengeLabelPositions[i] = self.challengeTypes[i].pos;
             }
-            for (int i = 11; i < self.checkBoxes.Count; ++i)
+            for (int i = 10; i < self.checkBoxes.Count; ++i)
             {
                 self.checkBoxes[i].pos.x = -150;
                 self.checkBoxes[i].inactive = true;
                 self.challengeTypes[i].pos.x = -150;
             }
+            /*
             while (self.dividers.Count > 10)
             {
                 self.container.RemoveChild(self.dividers[10]);
                 self.dividers.RemoveAt(10);
-            }
-            totalPages = Mathf.CeilToInt(((float)self.challengeTypes.Count) / 11f);
+            }*/
+            totalPages = Mathf.CeilToInt(((float)self.challengeTypes.Count) / 10f);
             currentPageIndex = 0;
-
         }
 
         private void SaveFilterSelection(Menu.FilterDialog menuDialog)
@@ -1838,4 +1880,5 @@ namespace ExpeditionsExpanded
         }
 
     }
+
 }
