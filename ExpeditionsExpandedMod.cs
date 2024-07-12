@@ -22,6 +22,8 @@ using Custom = RWCustom.Custom;
 using UnityEngine.Events;
 using MonoMod.Cil;
 using Mono.Cecil.Cil;
+using System.Reflection;
+
 
 #pragma warning disable CS0618
 
@@ -40,7 +42,11 @@ namespace ExpeditionsExpanded
 
         public static UnityAction OnHibernated;
 
-        internal static Dictionary<string, string> LapChallengeRegions;
+        internal static bool HasShinyShieldMask = false;
+        internal static bool HasCustomPlayer1 = false;
+        internal static readonly HashSet<CreatureTemplate.Type> Critters = new HashSet<CreatureTemplate.Type>();
+
+
         private void OnEnable()
         {
             On.RainWorld.OnModsInit += RainWorldOnOnModsInit;
@@ -66,28 +72,27 @@ namespace ExpeditionsExpanded
                 IL.Menu.FilterDialog.ctor += FilterDialog_ctorIL;
                 //On.Expedition.ExpeditionCoreFile.FromString += ExpeditionCoreFile_FromString; //This is used for debugging ONLY
 
+                foreach(ModManager.Mod mod in ModManager.ActiveMods)
+                {
+                    if(mod.id == "ShinyKelp.ShinyShieldMask")
+                        HasShinyShieldMask = true;
+                    else if(mod.id == "ShinyKelp.ExpPlayer1Change")
+                        HasCustomPlayer1 = true;
+                }
+                Critters.Clear();
+                Critters.Add(CreatureTemplate.Type.CicadaA);
+                Critters.Add(CreatureTemplate.Type.CicadaB);
+                Critters.Add(CreatureTemplate.Type.JetFish);
+                Critters.Add(CreatureTemplate.Type.EggBug);
+                Critters.Add(CreatureTemplate.Type.LanternMouse);
+                Critters.Add(CreatureTemplate.Type.Snail);
+                Critters.Add(MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek);
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded");
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal");
 
-                LapChallengeRegions = new Dictionary<string, string>();
-                string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/LapChallenge.txt";
-                if (File.Exists(filePath))
-                {
-                    StreamReader r = new StreamReader(filePath);
-                    string line;
-                    while((line = r.ReadLine()) != null)
-                    {
-                        string[] array = Regex.Split(line,",,");
-                        if(array.Length == 2)
-                        {
-                            LapChallengeRegions.Add(array[0], array[1]);
-                            UnityEngine.Debug.Log("Adding: " + array[0] + " " + array[1]);
-                        }
-                    }
-                    r.Close();
-                }
+                ReadUserRegionFilters();
 
                 ExpLogger = Logger;
 
@@ -100,9 +105,14 @@ namespace ExpeditionsExpanded
             }
         }
 
+        internal static Dictionary<string, HashSet<string>> UserDefinedRegionFilters;
+
+
         private void RainWorldGame_ShutDownProcess(On.RainWorldGame.orig_ShutDownProcess orig, RainWorldGame self)
         {
-            LapChallengeRegions.Clear();
+            foreach (HashSet<string> hash in UserDefinedRegionFilters.Values)
+                hash.Clear();
+            UserDefinedRegionFilters.Clear();
             orig(self);
         }
 
@@ -734,1151 +744,81 @@ namespace ExpeditionsExpanded
         }
 
         #endregion
-    }
 
-    public class GourmetChallenge : Challenge
-    {
-        int targetAmount;
-        HashSet<AbstractPhysicalObject.AbstractObjectType> eatenEdibleTypes;
-
-        public GourmetChallenge()
+        #region User-defined region filters
+        private void ReadUserRegionFilters()
         {
-            eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>();
-            On.Player.ObjectEaten += Player_ObjectEaten;
-        }
-
-        ~GourmetChallenge()
-        {
-            On.Player.ObjectEaten -= Player_ObjectEaten;
-        }
-
-        private void Player_ObjectEaten(On.Player.orig_ObjectEaten orig, Player self, IPlayerEdible edible)
-        {
-            try
+            UserDefinedRegionFilters = new Dictionary<string, HashSet<string>>();
+            foreach (string filePath in Directory.GetFiles(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
             {
-                if (!completed)
+                if (!filePath.EndsWith(".txt"))
+                    continue;
+                string[] splitName = filePath.Split('/');
+                string[] splitName2 = splitName[splitName.Length - 1].Split('\\');
+                string className = splitName2[splitName2.Length - 1];
+                className = className.Substring(0, className.Length - 4);
+                UserDefinedRegionFilters.Add(className, new HashSet<string>());
+
+                StreamReader r = new StreamReader(filePath);
+                string line;
+                while ((line = r.ReadLine()) != null)
                 {
-                    if( edible is PhysicalObject physObj)
-                    {
-                        AbstractPhysicalObject.AbstractObjectType eatenType = physObj.abstractPhysicalObject.type;
-                        if (!eatenEdibleTypes.Contains(eatenType))
-                        {
-                            eatenEdibleTypes.Add(eatenType);
-                            if (eatenEdibleTypes.Count == targetAmount)
-                                CompleteChallenge();
-                            UpdateDescription();
-                        }
-                    }
-
+                    UserDefinedRegionFilters[className].Add(line);
                 }
-            }
-            catch(Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, edible);
+                r.Close();
             }
         }
 
-        public override Challenge Generate()
+        public static bool SelectRegionAfterUserFilters(string challengeName, out string regionAcronym, List<string> applicableRegions)
         {
-            return new GourmetChallenge
-            {
-                targetAmount = (int)Mathf.Floor(ExpeditionData.challengeDifficulty * 12) + 3,
-                eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>()
-            };
-        }
+            if (UserDefinedRegionFilters.ContainsKey("~" + challengeName))
+                foreach (string s in UserDefinedRegionFilters["~" + challengeName])
+                    applicableRegions.Remove(s);
 
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Gourmet Diet");
-        }
+            if (UserDefinedRegionFilters.ContainsKey(challengeName))
+                foreach (string s in UserDefinedRegionFilters[challengeName])
+                    if (!applicableRegions.Contains(s))
+                        applicableRegions.Add(s);
 
-        public override string ToString()
-        {
-            string[] eatenTypesArray = new string[eatenEdibleTypes.Count];
-            int i = 0;
-            foreach (AbstractPhysicalObject.AbstractObjectType type in eatenEdibleTypes.ToArray())
+            if (applicableRegions.Count == 0)
             {
-                eatenTypesArray[i] = "><" + type.value;
-                i++;
+                regionAcronym = "";
+                return false;
             }
-            string saveString = string.Concat(
-                new string[]
-                {
-                    "GourmetChallenge",
-                    "~",
-                    ValueConverter.ConvertToString<int>(this.targetAmount),
-                    "><",
-                    this.completed ? "1" : "0",
-                    "><",
-                    this.hidden ? "1" : "0",
-                    "><",
-                    this.revealed ? "1" : "0"
-                }
-                );
 
-            foreach (AbstractPhysicalObject.AbstractObjectType type in eatenEdibleTypes.ToArray())
-            {
-                saveString = saveString + "><" + type.value;
-            }
-            return saveString;
-            
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            if (array.Length >= 4)
-            {
-                this.targetAmount = int.Parse(array[0], NumberStyles.Any, CultureInfo.InvariantCulture);
-                this.completed = (array[1] == "1");
-                this.hidden = (array[2] == "1");
-                this.revealed = (array[3] == "1");
-
-                eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>();
-
-                if(array.Length > 4)
-                    for (int i = 4; i < array.Length; i++)
-                        eatenEdibleTypes.Add(new AbstractPhysicalObject.AbstractObjectType(array[i]));
-            }
-            else
-            {
-                this.targetAmount = 5;
-                this.completed = this.hidden = this.revealed = false;
-                eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>();
-            }
-            this.UpdateDescription();
-            
-
-        }
-
-        public override void UpdateDescription()
-        {
-            this.description = ChallengeTools.IGT.Translate("Consume <target> different edibles [<current_amount>/<target>]")
-                .Replace("<target>", ValueConverter.ConvertToString<int>(this.targetAmount))
-                .Replace("<current_amount>", ValueConverter.ConvertToString<int>(this.eatenEdibleTypes.Count));
-            base.UpdateDescription();
-        }
-        public override int Points()
-        {
-            return (int)((targetAmount*11f - 25) * (hidden? 2 : 1));
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is GourmetChallenge);
-        }
-
-        public override void Reset()
-        {
-            this.eatenEdibleTypes.Clear();
-            base.Reset();
-        }
-
-    }
-
-    public class FlashChallenge : Challenge
-    {
-        int targetAmount;
-        int blindedKills;
-        public CreatureTemplate.Type targetCreature;
-        private enum FlashChallengeTargets
-        {
-            Lizard,
-            Scavenger,
-            Dropwig,
-            Vulture
-        }
-        public FlashChallenge()
-        {
-            blindedKills = 0;
-        }
-
-        ~FlashChallenge()
-        {
-        }
-
-        public override bool RespondToCreatureKill()
-        {
+            int selected = UnityEngine.Random.Range(0, applicableRegions.Count);
+            regionAcronym = applicableRegions[selected];
             return true;
         }
 
-        public override void CreatureKilled(Creature crit, int playerNumber)
+        public static bool ApplyRegionUserFilters(string challengeName, ref List<string> applicableRegions)
         {
-            if (crit.abstractCreature.creatureTemplate.TopAncestor().type == targetCreature && crit.Blinded)
+            if (applicableRegions is null)
+                applicableRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
+            if (UserDefinedRegionFilters.ContainsKey("~" + challengeName))
+                foreach (string s in UserDefinedRegionFilters["~" + challengeName])
+                    applicableRegions.Remove(s);
+
+            if (UserDefinedRegionFilters.ContainsKey(challengeName))
+                foreach (string s in UserDefinedRegionFilters[challengeName])
+                    if (!applicableRegions.Contains(s))
+                        applicableRegions.Add(s);
+
+            if (applicableRegions.Count == 0)
             {
-                blindedKills++;
-                if (blindedKills == targetAmount)
-                    CompleteChallenge();
-                UpdateDescription();
+                return false;
             }
-            base.CreatureKilled(crit, playerNumber);
-        }
-        public override Challenge Generate()
-        {
-            CreatureTemplate.Type chosenType;
-            float multiplier = 1f;
-            System.Random r = new System.Random();
-            int select = r.Next(0,4);
-            switch ((FlashChallengeTargets)select)
-            {
-                case FlashChallengeTargets.Dropwig:
-                    chosenType = CreatureTemplate.Type.DropBug;
-                    multiplier = 1.3f;
-                    break;
-                case FlashChallengeTargets.Lizard:
-                    chosenType = CreatureTemplate.Type.LizardTemplate;
-                    break;
-                case FlashChallengeTargets.Scavenger:
-                    chosenType = CreatureTemplate.Type.Scavenger;
-                    multiplier = 1.5f;
-                    break;
-                case FlashChallengeTargets.Vulture:
-                    chosenType = CreatureTemplate.Type.Vulture;
-                    multiplier = 0.6f;
-                    break;
-                default:
-                    chosenType = CreatureTemplate.Type.LizardTemplate;
-                    break;
-
-            }
-            return new FlashChallenge
-            {
-                targetCreature = chosenType,
-                targetAmount = (int)(ExpeditionData.challengeDifficulty * 5f * multiplier + 1),
-                blindedKills = 0
-            };
-        }
-
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Flashing");
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-           {
-                "FlashChallenge",
-                "~",
-                targetCreature.value,
-                "><",
-                ValueConverter.ConvertToString<int>(this.targetAmount),
-                "><",
-                ValueConverter.ConvertToString<int>(this.blindedKills),
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-           });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            this.targetCreature = new CreatureTemplate.Type(array[0]);
-            this.targetAmount = int.Parse(array[1], NumberStyles.Any, CultureInfo.InvariantCulture);
-            this.blindedKills = int.Parse(array[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-            this.completed = (array[3] == "1");
-            this.hidden = (array[4] == "1");
-            this.revealed = (array[5] == "1");
-            this.UpdateDescription();
-        }
-
-        public override void UpdateDescription()
-        {
-            string critName = "Unknown";
-            if (this.targetCreature == CreatureTemplate.Type.LizardTemplate)
-                critName = "Lizards";
-            else if (this.targetCreature.Index >= 0)
-                critName = ChallengeTools.IGT.Translate(ChallengeTools.creatureNames[this.targetCreature.Index]);
-            
-            this.description = ChallengeTools.IGT.Translate("Kill <target_amount> <target_creature> while they are blinded [<current_amount>/<target_amount>]")
-                .Replace("<target_amount>", ValueConverter.ConvertToString<int>(this.targetAmount))
-                .Replace("<current_amount>", ValueConverter.ConvertToString<int>(this.blindedKills))
-                .Replace("<target_creature>", critName);
-            base.UpdateDescription();
-        }
-
-        public override int Points()
-        {
-            return (int)(25 + (targetAmount * 12f)) * (hidden ? 2 : 1);
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is FlashChallenge flash && flash.targetCreature == this.targetCreature);
-        }
-
-        public override void Reset()
-        {
-            blindedKills = 0;
-            base.Reset();
-        }
-    }
-
-    public class SandwichChallenge : Challenge
-    {
-        int eatenMushrooms = 0;
-        int mushroomsToEat = 0;
-        public SandwichChallenge() 
-        {
-            On.Player.ObjectEaten += Player_ObjectEaten;
-            ExpeditionsExpandedMod.OnHibernated += OnHibernated;
-
-        }
-
-        private void Player_ObjectEaten(On.Player.orig_ObjectEaten orig, Player self, IPlayerEdible edible)
-        {
-            try
-            {
-                if(!completed && (edible is PhysicalObject physObj && physObj.abstractPhysicalObject.type == AbstractPhysicalObject.AbstractObjectType.Mushroom))
-                {
-                    eatenMushrooms++;
-                    if (eatenMushrooms == mushroomsToEat)
-                        CompleteChallenge();
-                    UpdateDescription();
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, edible);
-            }
-        }
-
-        ~SandwichChallenge()
-        {
-            On.Player.ObjectEaten -= Player_ObjectEaten;
-            ExpeditionsExpandedMod.OnHibernated -= OnHibernated;
-        }
-
-        private void OnHibernated()
-        {
-            if (!completed)
-            {
-                if (eatenMushrooms > 0)
-                {
-                    eatenMushrooms = 0;
-                    UpdateDescription();
-                }
-            }
-        }
-
-        public override Challenge Generate()
-        {
-            return new SandwichChallenge
-            {
-                eatenMushrooms = 0,
-                mushroomsToEat = (int)Mathf.Floor(ExpeditionData.challengeDifficulty * 13f) + 3
-            };
-        }
-
-        public override string ChallengeName()
-        {
-            return "'" + ChallengeTools.IGT.Translate("Sandwich") + "'";
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-            {
-                "SandwichChallenge",
-                "~",
-                ValueConverter.ConvertToString<int>(this.mushroomsToEat),
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-            });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            if (array.Length == 4)
-            {
-                this.mushroomsToEat = int.Parse(array[0], NumberStyles.Any, CultureInfo.InvariantCulture);
-                this.completed = (array[1] == "1");
-                this.hidden = (array[2] == "1");
-                this.revealed = (array[3] == "1");
-            }
-            else
-            {
-                this.mushroomsToEat = 5;
-                this.completed = this.hidden = this.revealed = false;
-            }
-
-            this.UpdateDescription();
-
-        }
-
-        public override void UpdateDescription()
-        {
-            this.description = ChallengeTools.IGT.Translate("Eat <target> mushrooms in one cycle [<current_amount>/<target>]")
-                .Replace("<target>", ValueConverter.ConvertToString<int>(this.mushroomsToEat))
-                .Replace("<current_amount>", ValueConverter.ConvertToString<int>(this.eatenMushrooms));
-            base.UpdateDescription();
-        }
-
-        public override int Points()
-        {
-            return (int)((mushroomsToEat * 9f) - 15) * (hidden ? 2 : 1);
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is SandwichChallenge);
-        }
-
-
-    }
-    
-    public class HeistChallenge : Challenge
-    {
-        bool killedAScav, payedToll;
-        bool doubleHeist;
-        string heistedRegion;
-        HashSet<EntityID> grabbedPearls = new HashSet<EntityID>();
-        HashSet<EntityID> stolenPearls = new HashSet<EntityID>();
-        Dictionary<EntityID, string> stolenPearlsDict = new Dictionary<EntityID, string>();
-        public HeistChallenge() 
-        {
-            On.Player.SlugcatGrab += Player_SlugcatGrab;
-            On.Player.Regurgitate += Player_Regurgitate;
-            On.Player.SpitOutOfShortCut += Player_SpitOutOfShortCut;
-            On.ScavengerOutpost.FeeRecieved += ScavengerOutpost_FeeRecieved;
-            ExpeditionsExpandedMod.OnHibernated += OnHibernated;
-            killedAScav = payedToll = false;
-            grabbedPearls = new HashSet<EntityID>();
-            stolenPearlsDict = new Dictionary<EntityID, string>();
-            heistedRegion = "_";
-        }
-
-        ~HeistChallenge()
-        {
-            On.Player.SlugcatGrab -= Player_SlugcatGrab;
-            On.Player.Regurgitate -= Player_Regurgitate;
-            On.Player.SpitOutOfShortCut -= Player_SpitOutOfShortCut;
-            On.ScavengerOutpost.FeeRecieved -= ScavengerOutpost_FeeRecieved;
-            ExpeditionsExpandedMod.OnHibernated -= OnHibernated;
-            grabbedPearls.Clear();
-            stolenPearls.Clear();
-        }
-
-        private void OnHibernated()
-        {
-            if (!completed)
-            {
-                killedAScav = false;
-                payedToll = false;
-                grabbedPearls.Clear();
-                stolenPearls.Clear();   
-            }
-        }
-
-        private void ScavengerOutpost_FeeRecieved(On.ScavengerOutpost.orig_FeeRecieved orig, ScavengerOutpost self, Player player, AbstractPhysicalObject item, int value)
-        {
-            try
-            {
-                if (!completed)
-                {
-                    if(item.type == AbstractPhysicalObject.AbstractObjectType.DataPearl)
-                        payedToll = true;
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, player, item, value);
-            }
-        }
-
-        private void Player_SpitOutOfShortCut(On.Player.orig_SpitOutOfShortCut orig, Player self, IntVector2 pos, Room newRoom, bool spitOutAllSticks)
-        {
-            try
-            {
-                if (!completed)
-                {
-                    if (!killedAScav && !payedToll && newRoom.abstractRoom.shelter)
-                    {
-                        if (self.objectInStomach != null && self.objectInStomach.type == AbstractPhysicalObject.AbstractObjectType.DataPearl && stolenPearlsDict.ContainsKey(self.objectInStomach.ID))
-                            CheckCompletion(stolenPearlsDict[self.objectInStomach.ID]);
-                        else
-                        {
-                            foreach (Creature.Grasp grasp in self.grasps)
-                            {
-                                if (grasp != null && grasp.grabbed is DataPearl p && stolenPearlsDict.ContainsKey(p.abstractPhysicalObject.ID))
-                                {
-                                    CheckCompletion(stolenPearlsDict[p.abstractPhysicalObject.ID]);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, pos, newRoom, spitOutAllSticks);
-            }
-        }
-
-        private void CheckCompletion(string region)
-        {
-            if (!doubleHeist)
-                CompleteChallenge();
-            else
-            {
-                if (heistedRegion == "_")
-                    heistedRegion = region;
-                else if (heistedRegion != region)
-                    CompleteChallenge();
-                UpdateDescription();
-            }
-        }
-
-        private void Player_Regurgitate(On.Player.orig_Regurgitate orig, Player self)
-        {
-            try
-            {
-                if (!completed)
-                {
-                    if (self.objectInStomach != null && self.objectInStomach.type == AbstractPhysicalObject.AbstractObjectType.DataPearl)
-                        if (!grabbedPearls.Contains(self.objectInStomach.ID))
-                            grabbedPearls.Add(self.objectInStomach.ID);
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self);
-            }
-        }
-
-        private void Player_SlugcatGrab(On.Player.orig_SlugcatGrab orig, Player self, PhysicalObject obj, int graspUsed)
-        {
-            try
-            {
-                if (!completed)
-                {
-
-                    if (obj != null && obj.abstractPhysicalObject.type == AbstractPhysicalObject.AbstractObjectType.DataPearl)
-                    {
-                        if (!grabbedPearls.Contains(obj.abstractPhysicalObject.ID))
-                        {
-                            grabbedPearls.Add(obj.abstractPhysicalObject.ID);
-                            if (self.room.abstractRoom.scavengerOutpost)
-                            {
-                                if(self.abstractCreature.world.game.session.creatureCommunities.LikeOfPlayer(CreatureCommunities.CommunityID.Scavengers, -1, self.playerState.playerNumber) < 0.1f)
-                                {
-                                    stolenPearls.Add(obj.abstractPhysicalObject.ID);
-                                    stolenPearlsDict.Add(obj.abstractPhysicalObject.ID, self.abstractCreature.world.region.name);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, obj, graspUsed);
-            }
-        }
-
-        public override bool RespondToCreatureKill()
-        {
             return true;
         }
 
-        public override void CreatureKilled(Creature crit, int playerNumber)
-        {
-            if (crit.abstractCreature.creatureTemplate.TopAncestor().type == CreatureTemplate.Type.Scavenger &&
-            crit.room.abstractRoom.scavengerOutpost)
-                killedAScav = true;
-            
-            base.CreatureKilled(crit, playerNumber);   
-        }
-
-        public override Challenge Generate()
-        {
-            return new HeistChallenge
-            {
-                doubleHeist = (ExpeditionData.challengeDifficulty > 0.9f)
-            };
-        }
-
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Heist"); ;
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-            {
-                "HeistChallenge",
-                "~",
-                this.doubleHeist ? "1" : "0",
-                "><",
-                this.heistedRegion,
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-            });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            this.doubleHeist = (array[0] == "1");
-            this.heistedRegion = array[1];
-            this.completed = (array[2] == "1");
-            this.hidden = (array[3] == "1");
-            this.revealed = (array[4] == "1");
-            this.UpdateDescription();
-        }
-
-        public override void UpdateDescription()
-        {
-            if (this.doubleHeist)
-            {
-                this.description = ChallengeTools.IGT.Translate("Steal from two tolls without killing, paying or chieftain [<score>/2]").Replace("<score>", (heistedRegion == "_" ? "0" : (completed? "2" : "1")));
-            }
-            else
-                this.description = ChallengeTools.IGT.Translate("Steal from a scav toll without killing, paying or chieftain");
-            base.UpdateDescription();
-        }
-        public override int Points()
-        {
-            int points = (doubleHeist ? 180 : 75);
-            return (int)(hidden ? points * 2 : points);
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is HeistChallenge);
-        }
-
-        public override void Reset()
-        {
-            killedAScav = false;
-            payedToll = false;
-            grabbedPearls.Clear();
-            stolenPearls.Clear();
-            heistedRegion = "_";
-            base.Reset();
-        }
-
-
+        #endregion
     }
 
-    public class LapChallenge : Challenge
+    public interface IRegionSpecificChallenge
     {
-        public string targetRegion;
-        int timesEntered = 0;
-
-        public  LapChallenge()
-        {
-            On.OverWorld.GateRequestsSwitchInitiation += OverWorld_GateRequestsSwitchInitiation;
-            timesEntered = 0;
-        }
-
-        ~LapChallenge()
-        {
-            On.OverWorld.GateRequestsSwitchInitiation -= OverWorld_GateRequestsSwitchInitiation;
-        }
-
-        private void OverWorld_GateRequestsSwitchInitiation(On.OverWorld.orig_GateRequestsSwitchInitiation orig, OverWorld self, RegionGate reportBackToGate)
-        {
-            try
-            {
-                if (!completed)
-                {
-                    string currentRegion = Region.GetVanillaEquivalentRegionAcronym(self.activeWorld.name);
-                    string[] array = Regex.Split(reportBackToGate.room.abstractRoom.name, "_");
-                    if (array.Length == 3)
-                    {
-                        string region;
-                        if (currentRegion == array[1])
-                        {
-                            region = array[2];
-                        }
-                        else
-                            region = array[1];
-                        if (region == targetRegion)
-                            timesEntered++;
-                        if (timesEntered == 2)
-                            CompleteChallenge();
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, reportBackToGate);
-            }
-        }
-
-        public override Challenge Generate()
-        {
-            List<string> list = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
-            foreach(string s in ExpeditionsExpandedMod.LapChallengeRegions.Keys)
-                list.Add(s);
-            list.Remove("SS");
-            list.Remove("OE");
-            list.Remove("LC");
-            list.Remove("DM");
-            list.Remove("MS");
-            list.Remove("RM");
-            list.Remove("HR");
-            if(ExpeditionData.challengeDifficulty < 0.9f)
-            {
-                list.Remove("SB");
-                list.Remove("UW");
-            }
-            timesEntered = 0;
-
-            int selected = UnityEngine.Random.Range(0, list.Count);
-
-            return new LapChallenge
-            {
-                targetRegion = list[selected]
-            };
-        }
-
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Region Lap"); ;
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-            {
-                "LapChallenge",
-                "~",
-                ValueConverter.ConvertToString<string>(this.targetRegion),
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-            });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            this.targetRegion = array[0];
-            this.completed = (array[1] == "1");
-            this.hidden = (array[2] == "1");
-            this.revealed = (array[3] == "1");
-
-            if (!SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer).Contains(targetRegion) &&
-                !ExpeditionsExpandedMod.LapChallengeRegions.ContainsKey(targetRegion))
-                targetRegion = "SU";
-
-            this.UpdateDescription();
-        }
-
-        public override void UpdateDescription()
-        {
-            string regionName = "";
-            if(ExpeditionsExpandedMod.LapChallengeRegions.ContainsKey(targetRegion))
-                regionName = ExpeditionsExpandedMod.LapChallengeRegions[targetRegion];
-            else
-                regionName = Region.GetRegionFullName(this.targetRegion, ExpeditionData.slugcatPlayer);
-            this.description = ChallengeTools.IGT.Translate("Enter <region> twice in one cycle.").Replace
-                ("<region>", ChallengeTools.IGT.Translate(regionName));
-            base.UpdateDescription();
-        }
-        
-        public override int Points()
-        {
-            int points = 160;
-            if (targetRegion == "UW" || targetRegion == "SB")
-                points = 220;
-            return (hidden? points*2 : points);
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is LapChallenge lap && lap.targetRegion == targetRegion);
-        }
-
-        public override void Reset()
-        {
-            timesEntered = 0;
-            base.Reset();
-        }
+        public List<string> ApplicableRegions { get; set; }
     }
 
-    public class ApexExpertChallenge : Challenge
-    {
-        enum ApexExpertTargets
-        {
-            RedLizard,
-            RedCentipede,
-            DaddyLongLegs,
-            MirosVulture
-            
-        }
-        public CreatureTemplate.Type targetCreature;
-        int targetAmount;
-        int targetsKilled;
-        public ApexExpertChallenge()
-        {
-            ExpeditionsExpandedMod.OnAllPlayersDied += OnAllPlayersDied;
-        }
 
-        ~ApexExpertChallenge()
-        {
-            ExpeditionsExpandedMod.OnAllPlayersDied -= OnAllPlayersDied;
-        }
-
-        private void OnAllPlayersDied()
-        {
-            if (!completed)
-            {
-                targetsKilled = 0;
-                UpdateDescription();
-            }
-        }
-
-        public override bool RespondToCreatureKill()
-        {
-            return true;
-        }
-        
-        public override void CreatureKilled(Creature crit, int playerNumber)
-        {
-            if (crit.abstractCreature.creatureTemplate.type == targetCreature)
-            {
-                targetsKilled++;
-                if (targetsKilled == targetAmount)
-                    CompleteChallenge();
-                UpdateDescription();
-            }
-        }
-
-        public override Challenge Generate()
-        {
-            CreatureTemplate.Type chosenType;
-            float multiplier = 1f;
-            System.Random r = new System.Random();
-            int select = 1, extra = 0;
-            if (ExpeditionData.challengeDifficulty > 0.5f)
-                select = r.Next(0, 4);
-            else
-                select = r.Next(0, 3);
-            switch ((ApexExpertTargets)select)
-            {
-                case ApexExpertTargets.RedLizard:
-                    chosenType = CreatureTemplate.Type.RedLizard;
-                    multiplier = 6f;
-                    break;
-                case ApexExpertTargets.RedCentipede:
-                    chosenType = CreatureTemplate.Type.RedCentipede;
-                    multiplier = 5f;
-                    break;
-                case ApexExpertTargets.DaddyLongLegs:
-                    chosenType = CreatureTemplate.Type.DaddyLongLegs;
-                    multiplier = 4f;
-                    break;
-                case ApexExpertTargets.MirosVulture:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture;
-                    extra = -1;
-                    multiplier = 4f;
-                    break;
-                default:
-                    chosenType = CreatureTemplate.Type.RedLizard;
-                    break;
-            }
-            return new ApexExpertChallenge
-            {
-                targetCreature = chosenType,
-                targetAmount = Math.Max(Mathf.CeilToInt(ExpeditionData.challengeDifficulty * multiplier), 2) + extra
-            };
-        }
-
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Apex Expert");
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-           {
-                "ApexExpertChallenge",
-                "~",
-                targetCreature.value,
-                "><",
-                ValueConverter.ConvertToString<int>(this.targetAmount),
-                "><",
-                ValueConverter.ConvertToString<int>(this.targetsKilled),
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-           });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            this.targetCreature = new CreatureTemplate.Type(array[0]);
-            this.targetAmount = int.Parse(array[1], NumberStyles.Any, CultureInfo.InvariantCulture);
-            this.targetsKilled = int.Parse(array[2], NumberStyles.Any, CultureInfo.InvariantCulture);
-            this.completed = (array[3] == "1");
-            this.hidden = (array[4] == "1");
-            this.revealed = (array[5] == "1");
-            if (ExpeditionsExpandedMod.DiedLastSession())
-                targetsKilled = 0;
-            this.UpdateDescription();
-        }
-        public override void UpdateDescription()
-        {
-            string critName = "Unknown";
-            if (this.targetCreature.Index >= 0)
-                critName = ChallengeTools.IGT.Translate(ChallengeTools.creatureNames[this.targetCreature.Index]);
-
-            this.description = ChallengeTools.IGT.Translate("Kill <target_amount> <target_creature> without dying [<current_amount>/<target_amount>]")
-                .Replace("<target_amount>", ValueConverter.ConvertToString<int>(this.targetAmount))
-                .Replace("<current_amount>", ValueConverter.ConvertToString<int>(this.targetsKilled))
-                .Replace("<target_creature>", critName);
-            base.UpdateDescription();
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is ApexExpertChallenge apexChallenge && apexChallenge.targetCreature == targetCreature);
-        }
-
-        public override int Points()
-        {
-            int points = 0;
-            if (targetCreature == CreatureTemplate.Type.RedLizard)
-                points = 34;
-            else if (targetCreature == CreatureTemplate.Type.RedCentipede)
-                points = 38;
-            else if (targetCreature == CreatureTemplate.Type.DaddyLongLegs)
-                points = 46;
-            else if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture)
-                points = 66;
-
-            return points * targetAmount * (this.hidden? 2 : 1);
-        }
-
-        public override void Reset()
-        {
-            targetsKilled = 0;
-            base.Reset();
-        }
-
-    }
-
-    public class SeaOfferingChallenge : Challenge
-    {
-        enum SeaOfferingTypes
-        {
-            EggBug,
-            LanternMouse,
-            Yeek
-        }
-        CreatureTemplate.Type offeringType;
-        EntityID offeringID;
-        float lastThrown;
-        public SeaOfferingChallenge()
-        {
-            On.Player.ThrowObject += Player_ThrowObject;
-            On.BigEel.Crush += BigEel_Crush;
-            offeringID = new EntityID();
-            lastThrown = 0f;
-        }
-        ~SeaOfferingChallenge()
-        {
-            On.Player.ThrowObject -= Player_ThrowObject;
-            On.BigEel.Crush -= BigEel_Crush;
-        }
-
-        private void Player_ThrowObject(On.Player.orig_ThrowObject orig, Player self, int grasp, bool eu)
-        {
-            try
-            {
-                if (!completed)
-                {
-                    if (self.grasps[grasp] != null && self.grasps[grasp].grabbed is Creature crit)
-                    {
-                        if(crit.abstractCreature.creatureTemplate.type == offeringType && !crit.dead)
-                        {
-                            offeringID = crit.abstractCreature.ID;
-                            lastThrown = Time.time;
-                        }
-                    }
-                }
-            }
-            catch(Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, grasp, eu);
-            }
-        }
-
-        private void BigEel_Crush(On.BigEel.orig_Crush orig, BigEel self, PhysicalObject obj)
-        {
-            try
-            {
-                if(!completed)
-                    if(obj != null && obj.abstractPhysicalObject.ID == offeringID)
-                        if(Time.time - lastThrown < 8f)
-                            CompleteChallenge();
-            }catch(Exception e)
-            {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
-            }
-            finally
-            {
-                orig(self, obj);
-            }
-        }
-
-
-
-        public override Challenge Generate()
-        {
-            bool canHaveYeeks = false;
-
-            if(ExpeditionData.challengeDifficulty > 0.8f)
-            {
-                List<string> regions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
-                regions.AddRange(SlugcatStats.SlugcatOptionalRegions(ExpeditionData.slugcatPlayer));
-                if (regions.Contains("OE") || regions.Contains("CL") || regions.Contains("RM"))
-                    canHaveYeeks = true;
-            }
-
-            CreatureTemplate.Type chosenType;
-            System.Random r = new System.Random();
-            int select = 1;
-            if (canHaveYeeks)
-                select = r.Next(0, 3);
-            else
-                select = r.Next(0, 2);
-            switch ((SeaOfferingTypes)select)
-            {
-                case SeaOfferingTypes.LanternMouse:
-                    chosenType = CreatureTemplate.Type.LanternMouse;
-                    break;
-                case SeaOfferingTypes.EggBug:
-                    chosenType = CreatureTemplate.Type.EggBug;
-                    break;
-                case SeaOfferingTypes.Yeek:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek;
-                    break;
-                default:
-                    chosenType = CreatureTemplate.Type.EggBug; 
-                    break;
-            }
-
-            return new SeaOfferingChallenge
-            {
-                offeringType = chosenType
-            };
-        }
-
-        public override string ToString()
-        {
-            return string.Concat(new string[]
-            {
-                "SeaOfferingChallenge",
-                "~",
-                offeringType.value,
-                "><",
-                this.completed ? "1" : "0",
-                "><",
-                this.hidden ? "1" : "0",
-                "><",
-                this.revealed ? "1" : "0"
-            });
-        }
-
-        public override void FromString(string args)
-        {
-            string[] array = Regex.Split(args, "><");
-            this.offeringType = new CreatureTemplate.Type(array[0]);
-            this.completed = (array[1] == "1");
-            this.hidden = (array[2] == "1");
-            this.revealed = (array[3] == "1");
-            this.UpdateDescription();
-        }
-
-        public override string ChallengeName()
-        {
-            return ChallengeTools.IGT.Translate("Sea Offering");
-        }
-
-        public override void UpdateDescription()
-        {
-            string critName = "Unknown";
-            if (this.offeringType.Index >= 0)
-                critName = ChallengeTools.IGT.Translate(offeringType.ToString());
-
-            this.description = ChallengeTools.IGT.Translate("Offer one <creature> alive to a Leviathan.")
-                .Replace("<creature>", critName);
-                
-            base.UpdateDescription();
-        }
-
-        public override int Points()
-        {
-            int points = 65;
-            if (offeringType == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek)
-                points = 90;
-            return points * (this.hidden? 2 : 1);
-        }
-
-        public override bool Duplicable(Challenge challenge)
-        {
-            return !(challenge is SeaOfferingChallenge);
-        }
-
-    }
 
 }
