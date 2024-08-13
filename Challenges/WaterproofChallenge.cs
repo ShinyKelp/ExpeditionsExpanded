@@ -123,7 +123,7 @@ namespace ExpeditionsExpanded
                 this.completed = (array[2] == "1");
                 this.hidden = (array[3] == "1");
                 this.revealed = (array[4] == "1");
-                if (ECEUtilities.IsRegionForbidden("WaterproofChallenge", targetRegion))
+                if (ECEUtilities.IsRegionForbidden("Waterproof", targetRegion))
                     targetRegion = SelectRegion();
             }
             catch (Exception e)
