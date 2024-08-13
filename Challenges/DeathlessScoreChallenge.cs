@@ -9,18 +9,18 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class DeathlessScoreChallenge : Challenge
+    public class DeathlessScoreChallenge : Challenge, IChallengeHooks
     {
         int scoreGoal;
         int currentScore;
-        public DeathlessScoreChallenge()
-        {
-            ExpeditionsExpandedMod.OnAllPlayersDied += OnAllPlayersDied;
-        }
 
-        ~DeathlessScoreChallenge()
+        public void ApplyHooks()
         {
-            ExpeditionsExpandedMod.OnAllPlayersDied -= OnAllPlayersDied;
+            ECEUtilities.OnAllPlayersDied += OnAllPlayersDied;
+        }
+        public void RemoveHooks()
+        {
+            ECEUtilities.OnAllPlayersDied -= OnAllPlayersDied;
         }
 
         private void OnAllPlayersDied()
@@ -94,12 +94,12 @@ namespace ExpeditionsExpanded
                 this.completed = (array[2] == "1");
                 this.hidden = (array[3] == "1");
                 this.revealed = (array[4] == "1");
-                if (ExpeditionsExpandedMod.DiedLastSession())
+                if (ECEUtilities.DiedLastSession())
                     currentScore = 0;
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 scoreGoal = 40;
                 currentScore = 0;
                 completed = hidden = revealed = false;

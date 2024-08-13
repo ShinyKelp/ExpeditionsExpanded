@@ -23,6 +23,7 @@ using UnityEngine.Events;
 using MonoMod.Cil;
 using Mono.Cecil.Cil;
 using System.Reflection;
+using IL.MoreSlugcats;
 
 
 #pragma warning disable CS0618
@@ -36,16 +37,11 @@ namespace ExpeditionsExpanded
 
     public class ExpeditionsExpandedMod : BaseUnityPlugin
     {
-        public static BepInEx.Logging.ManualLogSource ExpLogger { get; private set; }
-
-        public static UnityAction OnAllPlayersDied;
-
-        public static UnityAction OnHibernated;
-
         internal static bool HasShinyShieldMask = false;
         internal static bool HasCustomPlayer1 = false;
-        internal static readonly HashSet<CreatureTemplate.Type> Critters = new HashSet<CreatureTemplate.Type>();
+        internal static bool HasRedHorror = false;
 
+        internal static bool lastPupFoodLiked = false;
 
         private void OnEnable()
         {
@@ -53,6 +49,7 @@ namespace ExpeditionsExpanded
         }
 
         private bool IsInit;
+        private bool challengesHooked = false;
         private void RainWorldOnOnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
         {
             orig(self);
@@ -68,33 +65,42 @@ namespace ExpeditionsExpanded
                 On.RainWorldGame.GoToDeathScreen += RainWorldGame_GoToDeathScreen;
                 On.RainWorldGame.GoToStarveScreen += RainWorldGame_GoToStarveScreen;
                 On.Menu.CharacterSelectPage.AbandonButton_OnPressDone += CharacterSelectPage_AbandonButton_OnPressDone;
+
                 On.RainWorldGame.ShutDownProcess += RainWorldGame_ShutDownProcess;
+                //On.StoryGameSession.ctor += StoryGameSession_ctor;
+                On.ProcessManager.PostSwitchMainProcess += ProcessManager_PostSwitchMainProcess;
+
                 IL.Menu.FilterDialog.ctor += FilterDialog_ctorIL;
+                IL.MoreSlugcats.SlugNPCAI.AteFood += SlugNPCAI_AteFood;
                 //On.Expedition.ExpeditionCoreFile.FromString += ExpeditionCoreFile_FromString; //This is used for debugging ONLY
 
                 foreach(ModManager.Mod mod in ModManager.ActiveMods)
                 {
-                    if(mod.id == "ShinyKelp.ShinyShieldMask")
+                    if (mod.id == "ShinyKelp.ShinyShieldMask")
                         HasShinyShieldMask = true;
-                    else if(mod.id == "ShinyKelp.ExpPlayer1Change")
+                    else if (mod.id == "ShinyKelp.ExpPlayer1Change")
                         HasCustomPlayer1 = true;
+                    else if (mod.id == "lb-fgf-m4r-ik.red-horror-centi")
+                        HasRedHorror = true;
                 }
-                Critters.Clear();
-                Critters.Add(CreatureTemplate.Type.CicadaA);
-                Critters.Add(CreatureTemplate.Type.CicadaB);
-                Critters.Add(CreatureTemplate.Type.JetFish);
-                Critters.Add(CreatureTemplate.Type.EggBug);
-                Critters.Add(CreatureTemplate.Type.LanternMouse);
-                Critters.Add(CreatureTemplate.Type.Snail);
-                Critters.Add(MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek);
+                ECEUtilities.Critters.Clear();
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.CicadaA);
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.CicadaB);
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.JetFish);
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.EggBug);
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.LanternMouse);
+                ECEUtilities.Critters.Add(CreatureTemplate.Type.Snail);
+                ECEUtilities.Critters.Add(MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek);
+
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded");
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal");
+                if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/RegionFilters"))
+                    Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded/RegionFilters");
+                ECEUtilities.ReadUserRegionFilters();
 
-                ReadUserRegionFilters();
-
-                ExpLogger = Logger;
+                ECEUtilities.ExpLogger = Logger;
 
                 IsInit = true;
             }
@@ -105,16 +111,59 @@ namespace ExpeditionsExpanded
             }
         }
 
-        internal static Dictionary<string, HashSet<string>> UserDefinedRegionFilters;
 
+        /*
+        private void StoryGameSession_ctor(On.StoryGameSession.orig_ctor orig, StoryGameSession self, SlugcatStats.Name saveStateNumber, RainWorldGame game)
+        {
+            if(game != null && game.rainWorld != null && game.rainWorld.ExpeditionMode && !challengesHooked)
+            {
+                foreach(Challenge challenge in ExpeditionData.challengeList)
+                {
+                    if (challenge is IChallengeHooks hookedChallenge)
+                        hookedChallenge.ApplyHooks();
+                }
+                challengesHooked = true;
+                UnityEngine.Debug.Log("Applied challenge hooks.");
+            }
+            orig(self, saveStateNumber, game);
+        }*/
 
         private void RainWorldGame_ShutDownProcess(On.RainWorldGame.orig_ShutDownProcess orig, RainWorldGame self)
         {
-            foreach (HashSet<string> hash in UserDefinedRegionFilters.Values)
+            foreach (HashSet<string> hash in ECEUtilities.UserDefinedRegionFilters.Values)
                 hash.Clear();
-            UserDefinedRegionFilters.Clear();
+            ECEUtilities.UserDefinedRegionFilters.Clear();
+            ECEUtilities.Critters.Clear();
             orig(self);
         }
+
+        #region Challenge hook handling
+        private void ProcessManager_PostSwitchMainProcess(On.ProcessManager.orig_PostSwitchMainProcess orig, ProcessManager self, ProcessManager.ProcessID ID)
+        {
+            if (ID == ProcessManager.ProcessID.Game && self.rainWorld.ExpeditionMode && !challengesHooked && ExpeditionData.challengeList != null)
+            {
+                foreach (Challenge challenge in ExpeditionData.challengeList)
+                {
+                    if (challenge is IChallengeHooks hookedChallenge)
+                        hookedChallenge.ApplyHooks();
+                }
+                challengesHooked = true;
+                UnityEngine.Debug.Log("Applied challenge hooks.");
+            }
+            else if (ID != ProcessManager.ProcessID.Game && challengesHooked && ExpeditionData.challengeList != null)
+            {
+                foreach (Challenge challenge in ExpeditionData.challengeList)
+                {
+                    if (challenge is IChallengeHooks hookedChallenge)
+                        hookedChallenge.RemoveHooks();
+                }
+                challengesHooked = false;
+                UnityEngine.Debug.Log("Removed challenge hooks.");
+            }
+            orig(self, ID);
+        }
+
+        #endregion
 
         #region Challenge Filters
 
@@ -647,7 +696,7 @@ namespace ExpeditionsExpanded
                 RecordDeath();
                 try
                 {
-                    OnAllPlayersDied.Invoke();
+                    ECEUtilities.OnAllPlayersDied.Invoke();
                 }
                 catch (Exception e)
                 {
@@ -669,7 +718,7 @@ namespace ExpeditionsExpanded
                 RecordDeath();
                 try
                 {
-                    OnAllPlayersDied.Invoke();
+                    ECEUtilities.OnAllPlayersDied.Invoke();
                 }
                 catch (Exception e)
                 {
@@ -682,26 +731,6 @@ namespace ExpeditionsExpanded
             }
             else
                 orig(self);
-        }
-        
-        private void WinState_CycleCompleted(On.WinState.orig_CycleCompleted orig, WinState self, RainWorldGame game)
-        {
-            try
-            {
-                if (game.rainWorld.ExpeditionMode)
-                {
-                    ResetDeathRecords();
-                    OnHibernated.Invoke();
-                }
-            }
-            catch(Exception e)
-            {
-                Logger.LogError(e);
-            }
-            finally
-            {
-                orig(self, game);
-            }
         }
 
         private void CharacterSelectPage_AbandonButton_OnPressDone(On.Menu.CharacterSelectPage.orig_AbandonButton_OnPressDone orig, Menu.CharacterSelectPage self, Menu.Remix.MixedUI.UIfocusable trigger)
@@ -719,6 +748,27 @@ namespace ExpeditionsExpanded
                 orig(self, trigger);
             }
         }
+        
+        private void WinState_CycleCompleted(On.WinState.orig_CycleCompleted orig, WinState self, RainWorldGame game)
+        {
+            try
+            {
+                if (game.rainWorld.ExpeditionMode)
+                {
+                    ResetDeathRecords();
+                    ECEUtilities.OnHibernated.Invoke();
+                    UnityEngine.Debug.Log("On Hibernated.");
+                }
+            }
+            catch(Exception e)
+            {
+                Logger.LogError(e);
+            }
+            finally
+            {
+                orig(self, game);
+            }
+        }
 
         private void RecordDeath()
         {
@@ -726,13 +776,6 @@ namespace ExpeditionsExpanded
             string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/" + slugcatPlayer + ".txt";
             if (!File.Exists(filePath))
                 File.Create(filePath);
-        }
-
-        public static bool DiedLastSession()
-        {
-            string slugcatPlayer = ExpeditionData.slugcatPlayer.ToString();
-            string filePath = Custom.RootFolderDirectory() + "/ExpeditionsExpanded/internal/" + slugcatPlayer + ".txt";
-            return File.Exists(filePath);
         }
 
         private void ResetDeathRecords()
@@ -745,79 +788,25 @@ namespace ExpeditionsExpanded
 
         #endregion
 
-        #region User-defined region filters
-        private void ReadUserRegionFilters()
+        #region Other hooks
+        private void SlugNPCAI_AteFood(ILContext il)
         {
-            UserDefinedRegionFilters = new Dictionary<string, HashSet<string>>();
-            foreach (string filePath in Directory.GetFiles(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
+            ILCursor c = new ILCursor(il);
+            c.GotoNext(MoveType.After,
+                x => x.MatchAdd(),
+                x => x.MatchStfld<MoreSlugcats.SlugNPCAI>("foodReaction"));
+            c.Index -= 3;
+            c.EmitDelegate<Func<float, float>>((reactionValue) =>
             {
-                if (!filePath.EndsWith(".txt"))
-                    continue;
-                string[] splitName = filePath.Split('/');
-                string[] splitName2 = splitName[splitName.Length - 1].Split('\\');
-                string className = splitName2[splitName2.Length - 1];
-                className = className.Substring(0, className.Length - 4);
-                UserDefinedRegionFilters.Add(className, new HashSet<string>());
-
-                StreamReader r = new StreamReader(filePath);
-                string line;
-                while ((line = r.ReadLine()) != null)
-                {
-                    UserDefinedRegionFilters[className].Add(line);
-                }
-                r.Close();
-            }
+                if (reactionValue > 0f)
+                    ExpeditionsExpandedMod.lastPupFoodLiked = true;
+                return reactionValue;
+            });
         }
-
-        public static bool SelectRegionAfterUserFilters(string challengeName, out string regionAcronym, List<string> applicableRegions)
-        {
-            if (UserDefinedRegionFilters.ContainsKey("~" + challengeName))
-                foreach (string s in UserDefinedRegionFilters["~" + challengeName])
-                    applicableRegions.Remove(s);
-
-            if (UserDefinedRegionFilters.ContainsKey(challengeName))
-                foreach (string s in UserDefinedRegionFilters[challengeName])
-                    if (!applicableRegions.Contains(s))
-                        applicableRegions.Add(s);
-
-            if (applicableRegions.Count == 0)
-            {
-                regionAcronym = "";
-                return false;
-            }
-
-            int selected = UnityEngine.Random.Range(0, applicableRegions.Count);
-            regionAcronym = applicableRegions[selected];
-            return true;
-        }
-
-        public static bool ApplyRegionUserFilters(string challengeName, ref List<string> applicableRegions)
-        {
-            if (applicableRegions is null)
-                applicableRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
-            if (UserDefinedRegionFilters.ContainsKey("~" + challengeName))
-                foreach (string s in UserDefinedRegionFilters["~" + challengeName])
-                    applicableRegions.Remove(s);
-
-            if (UserDefinedRegionFilters.ContainsKey(challengeName))
-                foreach (string s in UserDefinedRegionFilters[challengeName])
-                    if (!applicableRegions.Contains(s))
-                        applicableRegions.Add(s);
-
-            if (applicableRegions.Count == 0)
-            {
-                return false;
-            }
-            return true;
-        }
-
         #endregion
     }
 
-    public interface IRegionSpecificChallenge
-    {
-        public List<string> ApplicableRegions { get; set; }
-    }
+
 
 
 

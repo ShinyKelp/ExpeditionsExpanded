@@ -5,51 +5,80 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
-
-public class SampleChallenge : Challenge
+using ExpeditionsExpanded;
+public class SampleChallenge : Challenge, IRegionSpecificChallenge, IChallengeHooks
 {
+    #region Region-Specific
+
+    //If your challenge uses specific regions, implement an interface like this one. It is important for compatibility with ExpeditionRegionSupport.
+    //This is only necessary if you want to generate a challenge that needs region data, like Vista or Pearl challenges.
+    interface IRegionSpecificChallenge
+    {
+        List<string> ApplicableRegions { get; set; }
+    }
+    List<string> baseApplicableRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);    //This is your base list of regions. It can have a hardcoded default value, but don't read/modify it directly in your code.
+    public List<string> ApplicableRegions                                                                   //This is what you actually want to use in your code.
+    { 
+        get => return baseApplicableRegions;
+        set 
+        {
+            baseApplicableRegions.Clear();
+            baseApplicableRegions.AddRange(value);
+        } 
+    }                                                               
+    #endregion
+
     #region Declaration
     //Variables
     int cycleGoalProgression;
     int deathlessGoalProgression;
     int goalToReach;
+    string targetRegion;
     List<object> someList;
 
-    //In Constructor, hook to any methods you want
     public SampleChallenge()
     {
-        On.Player.ObjectEaten += Player_ObjectEaten;
-
+        //Recommended to initialize your variables here, most importantly those that are not saved in savefiles.
         /*
         * The state of a challenge during a playthrough and the state of a challenge in a savefile are independent from each other.
-        * The state is only ever saved after each successful cycle.
-        * The state is only ever loaded when entering the expedition, or when clicking "Continue" in the death screen.
+        * The state is only ever saved to a file after each successful cycle.
+        * The state is only ever loaded from a file when entering the expedition, or when clicking "Continue" in the death screen.
         * This makes it tricky to alter progress after death, because any changes you make on death will immediately be overriden by the previous savestate.
         * Likewise, your variables are not going to be reset and re-read from savefile upon a successful cycle, but they WILL if the player exits back to the menu and re-enters.
         * So, to make it a lot easier to track progress, I have created two events that are called on player death and hibernation, and they ensure that variables will stay consistent    
         * between in-game states and savefile states.
         * Still, some manual tracking will be required (see FromString method)
         */
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Called when all players die in expedition.
-                                                                                        //Recommended to use for progress reset on death.
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated += Hibernated;  //Called when player hibernates successfully.
-                                                                                //Recommended to use for progress or variable reset on cycle end.
-
-        //Recommended to initialize your variables here, most importantly those that are not saved in savefiles.
         cycleGoalProgression = 0;
         deathlessGoalProgression = 0;
         someList = new List<object>();
     }
 
-    //In Destructor, remember to remove hook listeners
     ~SampleChallenge()
+    {
+        //If you have any lists, arrays, etc; clear them here.
+        someList.Clear();
+    }
+
+    //IMPORTANT: If you need hooks, implement the IChallengeHooks class. ExpeditionsExpanded will make sure to hook them when necessary.
+    //Don't apply the hooks anywhere else unless you know what you're doing.
+    public void ApplyHooks()
+    {
+        On.Player.ObjectEaten += Player_ObjectEaten;
+        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Called when all players die in expedition.
+                                                                                        //Recommended to use for progress reset on death.
+        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated += Hibernated;  //Called when player hibernates successfully.
+                                                                                //Recommended to use for progress or variable reset on cycle end.
+    }
+    //Remove all your hook listeners here
+    public void RemoveHooks()
     {
         On.Player.ObjectEaten -= Player_ObjectEaten;
         ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated -= Hibernated;
         ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied -= AllPlayersDied;
-        //If you have any lists, arrays, etc; clear them here.
-        someList.Clear();
     }
+
+
 
     #endregion
 
@@ -135,9 +164,25 @@ public class SampleChallenge : Challenge
     {
         float difficulty = ExpeditionData.challengeDifficulty;  //Difficulty slider of expedition menu. Goes from 0f to 1f inclusive.
         int thisToReach = 2 + (int)(difficulty * 10);
+        
+        List<string> availableRegions = ApplicableRegions;      //This list will undergo the filters that ExpeditionRegionSupport wants to use, if the mod is enabled.
+        availableRegions.Remove("SU");                          //Afterwards, you can do some modifications hard-coded. It is recommended to only *remove* regions from the base list,
+                                                                //but never add them.
+
+
+        //ECEUtilities class has some functions for manual user input.
+        //FilterAndSelectRegion will choose a region from the given list, after applying all user filters if possible.
+        //You must provide the name of the challenge class without "Challenge". You may also provide an alternative name,
+        //in case you also want to include the actual challenge name as an option.
+        string regionAcronym = ECEUtilities.FilterAndSelectRegion("Sample", availableRegions, "Example");
+        //If the function returns empty, that means that there are no available regions, and Generate should return a null value.
+        if (regionAcronym == "")
+            return null;
+
         return new SampleChallenge
         {
             goalToReach = thisToReach
+            targetRegion = regionAcronym
         };
     }
 
@@ -153,6 +198,8 @@ public class SampleChallenge : Challenge
                 ValueConverter.ConvertToString<int>(this.goalToReach),
                 "><",                                                               //Use '><' as separator to differentiate variables.
                 ValueConverter.ConvertToString<int>(this.deathlessGoalProgression), //Variables that are not 100% reset every cycle need to be included here.
+                "><",
+                targetRegion,
                 "><",
                 this.completed ? "1" : "0",                                         //Always include these three. You can use a different format if you want,
                 "><",                                                               //but keep it in mind in FromString.
@@ -171,16 +218,22 @@ public class SampleChallenge : Challenge
         //Be mindful of the order of variables
         this.goalToReach = int.Parse(array[0], NumberStyles.Any, CultureInfo.InvariantCulture);
         this.deathlessGoalProgression = int.Parse(array[1], NumberStyles.Any, CultureInfo.InvariantCulture);
-        this.completed = (array[2] == "1");
-        this.hidden = (array[3] == "1");
-        this.revealed = (array[4] == "1");
+        this.targetRegion = array[2];
+        this.completed = (array[3] == "1");
+        this.hidden = (array[4] == "1");
+        this.revealed = (array[5] == "1");
 
         //Remember: challenge states are ONLY saved when the player hibernates, not when they die. We must check if they died last time and update our state accordingly.
         //TO-DO: Method to check how many deaths in a row there were without a successful hibernation.
-        if (ExpeditionsExpandedMod.DiedLastSession())    //DiedLastSession() will return true if the last cycle of the expedition was a death.
+        if (ECEUtilities.DiedLastSession())    //DiedLastSession() will return true if the last cycle of the expedition was a death.
             deathlessGoalProgression = 0;
 
-        this.UpdateDescription();
+        //ECE.IsRegionForbidden will check wether the current region is no longer applicable. This allows users to change their filters mid-expedition.
+        //In such a case, it would be best to simply select another region at random.
+        if (ECEUtilities.IsRegionForbidden("Sample", targetRegion, "Example"))
+            targetRegion = "SU";
+
+            this.UpdateDescription();
     }
 
     #endregion
@@ -233,6 +286,10 @@ public class SampleChallenge : Challenge
     //Function to check wether this challenge is valid for a given slugcat.
     public override bool ValidForThisSlugcat(SlugcatStats.Name slugcat)
     {
+        //It is recommended to check here if there are any available regions with the current settings, to avoid potential menu softlocks.
+        List<string> regions = ApplicableRegions;
+        if (ECEUtilities.FilterAndSelectRegion("Sample", regions, "Example") == "")
+            return false;
         if (slugcat == SlugcatStats.Name.Yellow)
             return false;
         else if (slugcat == MoreSlugcats.MoreSlugcatsEnums.SlugcatStatsName.Saint)

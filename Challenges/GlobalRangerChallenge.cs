@@ -95,7 +95,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 this.targetAmount = 6;
                 revealed = hidden = completed = false;
             }

@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 namespace ExpeditionsExpanded
 {
-    public class WaterproofChallenge : Challenge, IRegionSpecificChallenge
+    public class WaterproofChallenge : Challenge, IRegionSpecificChallenge, IChallengeHooks
     {
         public List<string> baseAllowedRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
         public List<string> ApplicableRegions
@@ -23,14 +23,15 @@ namespace ExpeditionsExpanded
             }
         }
         public int totalFrames;
-        int currentFrames;
+        int currentFrames = 0;
         public string targetRegion;
-        public WaterproofChallenge() 
+
+        public void ApplyHooks()
         {
             On.Player.Update += Player_Update;
-        }
 
-        ~WaterproofChallenge() 
+        }
+        public void RemoveHooks()
         {
             On.Player.Update -= Player_Update;
         }
@@ -53,15 +54,15 @@ namespace ExpeditionsExpanded
             }
             catch(Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
         }
 
-        public override Challenge Generate()
+        private string SelectRegion()
         {
             List<string> regions = ApplicableRegions;
             if (regions is null)
-                return null;
+                regions = new List<string>();
             else
             {
                 regions.Remove("UW");
@@ -73,9 +74,15 @@ namespace ExpeditionsExpanded
                     regions.Remove("GW");
                 regions.Remove("DS");
             }
+            return ECEUtilities.FilterAndSelectRegion("Waterproof", regions);
+        }
 
-            if (!ExpeditionsExpandedMod.SelectRegionAfterUserFilters("WaterproofChallenge", out string regionAcronym, regions))
-                return null;
+        public override Challenge Generate()
+        {
+            string regionAcronym = SelectRegion();
+            if(regionAcronym == "")
+                    return null;
+            else
             return new WaterproofChallenge
             {
                 totalFrames = (int)(ExpeditionData.challengeDifficulty * 6f * 40f) + 40*32,
@@ -116,10 +123,12 @@ namespace ExpeditionsExpanded
                 this.completed = (array[2] == "1");
                 this.hidden = (array[3] == "1");
                 this.revealed = (array[4] == "1");
+                if (ECEUtilities.IsRegionForbidden("WaterproofChallenge", targetRegion))
+                    targetRegion = SelectRegion();
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 this.totalFrames = 32;
                 this.targetRegion = "SU";
                 this.completed = false;
@@ -131,10 +140,12 @@ namespace ExpeditionsExpanded
 
         public override void UpdateDescription()
         {
-
+            string regionName = Region.GetRegionFullName(targetRegion, ExpeditionData.slugcatPlayer);
+            if (regionName == "Unknown Region")
+                regionName += "(" + targetRegion  + ")";
             this.description = ChallengeTools.IGT.Translate("Stay <target_amount> seconds underwater in <target_region>"
                 .Replace("<target_amount>", ValueConverter.ConvertToString<int>(this.totalFrames / 40))
-                .Replace("<target_region>", Region.GetRegionFullName(targetRegion, ExpeditionData.slugcatPlayer)));
+                .Replace("<target_region>", regionName));
             base.UpdateDescription();
         }
 
@@ -151,7 +162,7 @@ namespace ExpeditionsExpanded
         public override bool ValidForThisSlugcat(SlugcatStats.Name slugcat)
         {
             List<string> regions = ApplicableRegions;
-            if (!ExpeditionsExpandedMod.ApplyRegionUserFilters("WaterproofChallenge", ref regions))
+            if (ECEUtilities.FilterAndSelectRegion("Waterproof", regions) == "")
                 return false;
             if (ExpeditionsExpandedMod.HasCustomPlayer1)
                 return true;

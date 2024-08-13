@@ -9,16 +9,22 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class SandwichChallenge : Challenge
+    public class SandwichChallenge : Challenge, IChallengeHooks
     {
         int eatenMushrooms = 0;
-        int mushroomsToEat = 0;
-        public SandwichChallenge()
+        int mushroomsToEat;
+
+        public void ApplyHooks()
         {
             On.Player.ObjectEaten += Player_ObjectEaten;
             On.Spear.HitSomethingWithoutStopping += Spear_HitSomethingWithoutStopping;
-            ExpeditionsExpandedMod.OnHibernated += OnHibernated;
-
+            ECEUtilities.OnHibernated += OnHibernated;
+        }
+        public void RemoveHooks()
+        {
+            On.Player.ObjectEaten -= Player_ObjectEaten;
+            On.Spear.HitSomethingWithoutStopping -= Spear_HitSomethingWithoutStopping;
+            ECEUtilities.OnHibernated -= OnHibernated;
         }
 
         private void Spear_HitSomethingWithoutStopping(On.Spear.orig_HitSomethingWithoutStopping orig, Spear self, PhysicalObject obj, BodyChunk chunk, PhysicalObject.Appendage appendage)
@@ -35,7 +41,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -57,7 +63,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -67,8 +73,7 @@ namespace ExpeditionsExpanded
 
         ~SandwichChallenge()
         {
-            On.Player.ObjectEaten -= Player_ObjectEaten;
-            ExpeditionsExpandedMod.OnHibernated -= OnHibernated;
+
         }
 
         private void OnHibernated()
@@ -125,7 +130,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 mushroomsToEat = 3;
                 completed = hidden = revealed = false;
             }

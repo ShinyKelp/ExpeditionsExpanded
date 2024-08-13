@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class FishtankChallenge : Challenge, IRegionSpecificChallenge
+    public class FishtankChallenge : Challenge, IRegionSpecificChallenge, IChallengeHooks
     {
         public List<string> baseAllowedRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
         public List<string> ApplicableRegions
@@ -23,14 +23,15 @@ namespace ExpeditionsExpanded
                 baseAllowedRegions.AddRange(value);
             }
         }
+
         public int targetAmount;
         public string targetRegion;
-        public FishtankChallenge() 
+
+        public void ApplyHooks()
         {
             On.Player.Update += Player_Update;
         }
-
-        ~FishtankChallenge() 
+        public void RemoveHooks()
         {
             On.Player.Update -= Player_Update;
         }
@@ -54,15 +55,15 @@ namespace ExpeditionsExpanded
             }
             catch(Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
         }
 
-        public override Challenge Generate()
+        private string SelectRegion()
         {
             List<string> regions = ApplicableRegions;
             if (regions is null)
-                return null;
+                regions = new List<string>();
             else
             {
                 regions.Remove("UW");
@@ -74,8 +75,15 @@ namespace ExpeditionsExpanded
                     regions.Remove("GW");
                 regions.Remove("DS");
             }
-            if (!ExpeditionsExpandedMod.SelectRegionAfterUserFilters("FishtankChallenge", out string regionAcronym, regions))
+            return ECEUtilities.FilterAndSelectRegion("Fishtank", regions);
+        }
+
+        public override Challenge Generate()
+        {
+            string regionAcronym = SelectRegion();
+            if (regionAcronym == "")
                 return null;
+            else
             return new FishtankChallenge
             {
                 targetAmount = (int)(ExpeditionData.challengeDifficulty * 7f) + 1,
@@ -116,10 +124,12 @@ namespace ExpeditionsExpanded
                 this.completed = (array[2] == "1");
                 this.hidden = (array[3] == "1");
                 this.revealed = (array[4] == "1");
+                if (ECEUtilities.IsRegionForbidden("FishtankChallenge", targetRegion))
+                    targetRegion = SelectRegion();
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 this.targetAmount = 2;
                 this.targetRegion = "SU";
                 completed = revealed = hidden = false;
@@ -150,7 +160,7 @@ namespace ExpeditionsExpanded
         public override bool ValidForThisSlugcat(SlugcatStats.Name slugcat)
         {
             List<string> regions = ApplicableRegions;
-            if (!ExpeditionsExpandedMod.ApplyRegionUserFilters("WaterproofChallenge", ref regions))
+            if (ECEUtilities.FilterAndSelectRegion("Fishtank", regions) == "")
                 return false;
             return base.ValidForThisSlugcat(slugcat);
         }

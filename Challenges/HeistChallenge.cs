@@ -10,34 +10,34 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class HeistChallenge : Challenge
+    public class HeistChallenge : Challenge, IChallengeHooks
     {
-        bool killedAScav, payedToll;
+        bool killedAScav = false, payedToll = false;
         bool doubleHeist;
-        string heistedRegion;
+        string heistedRegion = "_";
         HashSet<EntityID> grabbedPearls = new HashSet<EntityID>();
         HashSet<EntityID> stolenPearls = new HashSet<EntityID>();
         Dictionary<EntityID, string> stolenPearlsDict = new Dictionary<EntityID, string>();
-        public HeistChallenge()
+
+        public void ApplyHooks()
         {
             On.Player.SlugcatGrab += Player_SlugcatGrab;
             On.Player.Regurgitate += Player_Regurgitate;
             On.Player.SpitOutOfShortCut += Player_SpitOutOfShortCut;
             On.ScavengerOutpost.FeeRecieved += ScavengerOutpost_FeeRecieved;
-            ExpeditionsExpandedMod.OnHibernated += OnHibernated;
-            killedAScav = payedToll = false;
-            grabbedPearls = new HashSet<EntityID>();
-            stolenPearlsDict = new Dictionary<EntityID, string>();
-            heistedRegion = "_";
+            ECEUtilities.OnHibernated += OnHibernated;
         }
-
-        ~HeistChallenge()
+        public void RemoveHooks()
         {
             On.Player.SlugcatGrab -= Player_SlugcatGrab;
             On.Player.Regurgitate -= Player_Regurgitate;
             On.Player.SpitOutOfShortCut -= Player_SpitOutOfShortCut;
             On.ScavengerOutpost.FeeRecieved -= ScavengerOutpost_FeeRecieved;
-            ExpeditionsExpandedMod.OnHibernated -= OnHibernated;
+            ECEUtilities.OnHibernated -= OnHibernated;
+        }
+
+        ~HeistChallenge()
+        {
             grabbedPearls.Clear();
             stolenPearls.Clear();
             stolenPearlsDict.Clear();
@@ -66,7 +66,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -100,7 +100,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -135,7 +135,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -169,7 +169,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -235,7 +235,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 doubleHeist = false;
                 heistedRegion = "";
                 completed = hidden = revealed = false;
@@ -251,7 +251,7 @@ namespace ExpeditionsExpanded
                 this.description = ChallengeTools.IGT.Translate("Steal from two tolls without killing, paying or chieftain [<score>/2]").Replace("<score>", (heistedRegion == "_" ? "0" : (completed ? "2" : "1")));
             }
             else
-                this.description = ChallengeTools.IGT.Translate("Steal from a scav toll without killing, paying or chieftain");
+                this.description = ChallengeTools.IGT.Translate("Steal from AngryNoodle_OnHibernated scav toll without killing, paying or chieftain");
             base.UpdateDescription();
         }
         public override int Points()

@@ -122,7 +122,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetCreature = CreatureTemplate.Type.Scavenger;
                 targetAmount = 2;
                 blindedKills = 0;

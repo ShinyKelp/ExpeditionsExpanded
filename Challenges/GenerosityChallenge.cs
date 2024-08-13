@@ -9,20 +9,22 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class GenerosityChallenge : Challenge
+    public class GenerosityChallenge : Challenge, IChallengeHooks
     {
         public HashSet<EntityID> giftedMasks = new HashSet<EntityID>();   
         int targetAmount;
 
-        public GenerosityChallenge()
+        ~GenerosityChallenge()
+        {
+            giftedMasks.Clear();
+        }
+        public void ApplyHooks()
         {
             On.ScavengerAI.RecognizePlayerOfferingGift += ScavengerAI_RecognizePlayerOfferingGift;
         }
-
-        ~GenerosityChallenge()
+        public void RemoveHooks()
         {
             On.ScavengerAI.RecognizePlayerOfferingGift -= ScavengerAI_RecognizePlayerOfferingGift;
-            giftedMasks.Clear();
         }
 
         private void ScavengerAI_RecognizePlayerOfferingGift(On.ScavengerAI.orig_RecognizePlayerOfferingGift orig, ScavengerAI self, Tracker.CreatureRepresentation subRep, Tracker.CreatureRepresentation objRep, bool objIsMe, PhysicalObject item)
@@ -42,7 +44,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -123,7 +125,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetAmount = 2;
                 completed = hidden = revealed = false;
             }
@@ -156,6 +158,15 @@ namespace ExpeditionsExpanded
         {
             giftedMasks.Clear();
             base.Reset();
+        }
+        public override bool ValidForThisSlugcat(SlugcatStats.Name slugcat)
+        {
+            if (!ExpeditionsExpandedMod.HasShinyShieldMask)
+                return false;
+            if (!ExpeditionsExpandedMod.HasCustomPlayer1 && ExpeditionData.slugcatPlayer ==
+                MoreSlugcats.MoreSlugcatsEnums.SlugcatStatsName.Artificer)
+                return false;
+            return base.ValidForThisSlugcat(slugcat);
         }
 
     }

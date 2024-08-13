@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class LapChallenge : Challenge, IRegionSpecificChallenge
+    public class LapChallenge : Challenge, IRegionSpecificChallenge, IChallengeHooks
     {
 
         List<string> baseAllowedRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);
@@ -30,18 +30,18 @@ namespace ExpeditionsExpanded
         int timesEntered = 0;
         bool doubleCycle = false;
         bool enteredLastCycle = false;
-        public LapChallenge()
+
+        public void ApplyHooks()
         {
             On.OverWorld.GateRequestsSwitchInitiation += OverWorld_GateRequestsSwitchInitiation;
-            ExpeditionsExpandedMod.OnAllPlayersDied += LapChallenge_AllPlayersDied;
-            ExpeditionsExpandedMod.OnHibernated += LapChallenge_Hibernated;
+            ECEUtilities.OnAllPlayersDied += LapChallenge_AllPlayersDied;
+            ECEUtilities.OnHibernated += LapChallenge_Hibernated;
         }
-
-        ~LapChallenge()
+        public void RemoveHooks()
         {
             On.OverWorld.GateRequestsSwitchInitiation -= OverWorld_GateRequestsSwitchInitiation;
-            ExpeditionsExpandedMod.OnAllPlayersDied -= LapChallenge_AllPlayersDied;
-            ExpeditionsExpandedMod.OnHibernated -= LapChallenge_Hibernated;
+            ECEUtilities.OnAllPlayersDied -= LapChallenge_AllPlayersDied;
+            ECEUtilities.OnHibernated -= LapChallenge_Hibernated;
         }
 
         private void LapChallenge_Hibernated()
@@ -93,7 +93,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -101,28 +101,32 @@ namespace ExpeditionsExpanded
             }
         }
 
-        public override Challenge Generate()
+        private string SelectRegion()
         {
-            List<string> list = ApplicableRegions;
-
-            list.Remove("SS");
-            list.Remove("OE");
-            list.Remove("LC");
-            list.Remove("DM");
-            list.Remove("MS");
-            list.Remove("RM");
-            list.Remove("HR");
-            bool dCycle;
+            List<string> regions = ApplicableRegions;
+            if (regions is null)
+                regions = new List<string>();
+            regions.Remove("SS");
+            regions.Remove("OE");
+            regions.Remove("LC");
+            regions.Remove("DM");
+            regions.Remove("MS");
+            regions.Remove("RM");
+            regions.Remove("HR");
             if (ExpeditionData.challengeDifficulty < 0.8f)
             {
-                list.Remove("SB");
-                list.Remove("UW");
-                dCycle = true;
+                regions.Remove("SB");
+                regions.Remove("UW");
             }
-            else
-                dCycle = false;
 
-            if (!ExpeditionsExpandedMod.SelectRegionAfterUserFilters("LapChallenge", out string regionAcronym, list))
+            return ECEUtilities.FilterAndSelectRegion("Lap", regions, "RegionLap");
+        }
+
+        public override Challenge Generate()
+        { 
+            bool dCycle = ExpeditionData.challengeDifficulty < 0.8f;
+            string regionAcronym = SelectRegion();
+            if (regionAcronym == "")
                 return null;
             else
                 return new LapChallenge
@@ -173,12 +177,16 @@ namespace ExpeditionsExpanded
                 this.hidden = (array[5] == "1");
                 this.revealed = (array[6] == "1");
 
-                if (ExpeditionsExpandedMod.DiedLastSession())
+                if (ECEUtilities.DiedLastSession())
                     enteredLastCycle = false;
+
+                if (ECEUtilities.IsRegionForbidden("LapChallenge", targetRegion))
+                    targetRegion = SelectRegion();
+
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetRegion = "SU";
                 doubleCycle = true;
                 enteredLastCycle = false;
@@ -216,7 +224,7 @@ namespace ExpeditionsExpanded
         public override bool ValidForThisSlugcat(SlugcatStats.Name slugcat)
         {
             List<string> regions = ApplicableRegions;
-            if (!ExpeditionsExpandedMod.ApplyRegionUserFilters("WaterproofChallenge", ref regions))
+            if (ECEUtilities.FilterAndSelectRegion("Lap", regions, "RegionLap") == "")
                 return false;
             return base.ValidForThisSlugcat(slugcat);
         }

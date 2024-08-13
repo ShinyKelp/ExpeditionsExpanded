@@ -9,20 +9,19 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class SeaOfferingChallenge : Challenge
+    public class SeaOfferingChallenge : Challenge, IChallengeHooks
     {
         public int totalOffers;
-        int currentOffers;
-        EntityID offeringID;
-        float lastThrown;
-        public SeaOfferingChallenge()
+        int currentOffers = 0;
+        EntityID offeringID = new EntityID();
+        float lastThrown = 0F;
+
+        public void ApplyHooks()
         {
             On.Player.ThrowObject += Player_ThrowObject;
             On.BigEel.Crush += BigEel_Crush;
-            offeringID = new EntityID();
-            lastThrown = 0f;
         }
-        ~SeaOfferingChallenge()
+        public void RemoveHooks()
         {
             On.Player.ThrowObject -= Player_ThrowObject;
             On.BigEel.Crush -= BigEel_Crush;
@@ -36,7 +35,7 @@ namespace ExpeditionsExpanded
                 {
                     if (self.grasps[grasp] != null && self.grasps[grasp].grabbed is Creature crit)
                     {
-                        if (ExpeditionsExpandedMod.Critters.Contains(crit.abstractCreature.creatureTemplate.type) && !crit.dead)
+                        if (ECEUtilities.Critters.Contains(crit.abstractCreature.creatureTemplate.type) && !crit.dead)
                         {
                             offeringID = crit.abstractCreature.ID;
                             lastThrown = Time.time;
@@ -46,7 +45,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -70,7 +69,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -127,7 +126,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 this.totalOffers = 1;
                 this.currentOffers = 0;
                 completed = hidden = revealed = false;
@@ -143,7 +142,7 @@ namespace ExpeditionsExpanded
         public override void UpdateDescription()
         {
 
-            this.description = ChallengeTools.IGT.Translate("Offer <total_amount> critters alive to a Leviathan [<current_amount>/<total_amount>]"
+            this.description = ChallengeTools.IGT.Translate("Offer <total_amount> critters alive to AngryNoodle_OnHibernated Leviathan [<current_amount>/<total_amount>]"
                 .Replace("<total_amount>", totalOffers.ToString())
                 .Replace("<current_amount>", currentOffers.ToString()));
 

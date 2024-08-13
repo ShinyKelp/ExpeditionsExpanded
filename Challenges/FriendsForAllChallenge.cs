@@ -9,16 +9,20 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-   public class FriendsForAllChallenge : Challenge
+   public class FriendsForAllChallenge : Challenge, IChallengeHooks
     {
         public int amountToTame;
         HashSet<CreatureTemplate.Type> tamedCreatures = new HashSet<CreatureTemplate.Type>();
-        public FriendsForAllChallenge() 
+
+        ~FriendsForAllChallenge()
+        {
+            tamedCreatures.Clear();
+        }
+        public void ApplyHooks()
         {
             On.LizardAI.GiftRecieved += LizardAI_GiftRecieved;
         }
-
-        ~FriendsForAllChallenge()
+        public void RemoveHooks()
         {
             On.LizardAI.GiftRecieved -= LizardAI_GiftRecieved;
         }
@@ -38,7 +42,7 @@ namespace ExpeditionsExpanded
             }
             catch(Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
         }
 
@@ -107,7 +111,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 amountToTame = 2;
                 completed = hidden = revealed = false;
             }

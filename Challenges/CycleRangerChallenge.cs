@@ -9,19 +9,22 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class CycleRangerChallenge : Challenge
+    public class CycleRangerChallenge : Challenge, IChallengeHooks
     {
         HashSet<CreatureTemplate.Type> killedCreatures = new HashSet<CreatureTemplate.Type>();
         public int targetAmount;
-        public CycleRangerChallenge()
-        {
-            ExpeditionsExpandedMod.OnHibernated += RangerChallenge_OnHibernated;
-        }
 
         ~CycleRangerChallenge()
         {
-            ExpeditionsExpandedMod.OnHibernated -= RangerChallenge_OnHibernated;
             killedCreatures.Clear();
+        }
+        public void ApplyHooks()
+        {
+            ECEUtilities.OnHibernated += RangerChallenge_OnHibernated;
+        }
+        public void RemoveHooks()
+        {
+            ECEUtilities.OnHibernated -= RangerChallenge_OnHibernated;
         }
 
         private void RangerChallenge_OnHibernated()
@@ -91,7 +94,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetAmount = 3;
                 completed = hidden = revealed = false;
             }

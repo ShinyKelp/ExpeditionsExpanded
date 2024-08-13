@@ -1,4 +1,5 @@
 ﻿using Expedition;
+using IL.MoreSlugcats;
 using Menu.Remix;
 using System;
 using System.Collections.Generic;
@@ -9,27 +10,29 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class ApexExpertChallenge : Challenge
+    public class ApexExpertChallenge : Challenge, IChallengeHooks
     {
         enum ApexExpertTargets
         {
+            EliteScavenger,
+            DaddyLongLegs,
             RedLizard,
             RedCentipede,
-            DaddyLongLegs,
             MirosVulture
 
         }
+
         public CreatureTemplate.Type targetCreature;
         int targetAmount;
         int targetsKilled;
-        public ApexExpertChallenge()
-        {
-            ExpeditionsExpandedMod.OnAllPlayersDied += OnAllPlayersDied;
-        }
 
-        ~ApexExpertChallenge()
+        public void ApplyHooks()
         {
-            ExpeditionsExpandedMod.OnAllPlayersDied -= OnAllPlayersDied;
+            ECEUtilities.OnAllPlayersDied += OnAllPlayersDied;
+        }
+        public void RemoveHooks()
+        {
+            ECEUtilities.OnAllPlayersDied -= OnAllPlayersDied;
         }
 
         private void OnAllPlayersDied()
@@ -50,6 +53,9 @@ namespace ExpeditionsExpanded
         {
             if (!completed && crit.abstractCreature.creatureTemplate.type == targetCreature)
             {
+                if (crit.abstractCreature.creatureTemplate.type == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite)
+                    if (crit.room.world.game.session.creatureCommunities.LikeOfPlayer(CreatureCommunities.CommunityID.Scavengers, -1, playerNumber) > 0.25f)
+                        return;
                 targetsKilled++;
                 if (targetsKilled >= targetAmount)
                     CompleteChallenge();
@@ -62,29 +68,37 @@ namespace ExpeditionsExpanded
             CreatureTemplate.Type chosenType;
             float multiplier = 1f;
             System.Random r = new System.Random();
-            int select = 1, extra = 0;
-            if (ExpeditionData.challengeDifficulty > 0.5f)
-                select = r.Next(0, 4);
-            else
-                select = r.Next(0, 3);
+            int select, extra = 0;
+
+            int highestTarget = 3;
+            if (ExpeditionData.challengeDifficulty > 0.25f)
+                highestTarget++;
+            if (ExpeditionData.challengeDifficulty > 0.75f)
+                highestTarget++;    
+
+            select = r.Next(0, highestTarget);
             switch ((ApexExpertTargets)select)
             {
-                case ApexExpertTargets.RedLizard:
-                    chosenType = CreatureTemplate.Type.RedLizard;
-                    multiplier = 6f;
-                    break;
-                case ApexExpertTargets.RedCentipede:
-                    chosenType = CreatureTemplate.Type.RedCentipede;
-                    multiplier = 5f;
+                case ApexExpertTargets.EliteScavenger:
+                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite;
+                    multiplier = 8f;
                     break;
                 case ApexExpertTargets.DaddyLongLegs:
                     chosenType = CreatureTemplate.Type.DaddyLongLegs;
+                    multiplier = 6f;
+                    break;
+                case ApexExpertTargets.RedLizard:
+                    chosenType = CreatureTemplate.Type.RedLizard;
+                    multiplier = 5f;
+                    break;
+                case ApexExpertTargets.RedCentipede:
+                    chosenType = CreatureTemplate.Type.RedCentipede;
                     multiplier = 4f;
                     break;
                 case ApexExpertTargets.MirosVulture:
                     chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture;
-                    extra = -1;
-                    multiplier = 4f;
+                    extra = -5;
+                    multiplier = 8f;
                     break;
                 default:
                     chosenType = CreatureTemplate.Type.RedLizard;
@@ -133,12 +147,12 @@ namespace ExpeditionsExpanded
                 this.completed = (array[3] == "1");
                 this.hidden = (array[4] == "1");
                 this.revealed = (array[5] == "1");
-                if (ExpeditionsExpandedMod.DiedLastSession())
+                if (ECEUtilities.DiedLastSession())
                     targetsKilled = 0;
             }
             catch(Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetCreature = CreatureTemplate.Type.RedLizard;
                 targetAmount = 2;
                 targetsKilled = 0;
@@ -148,6 +162,8 @@ namespace ExpeditionsExpanded
         }
         public override void UpdateDescription()
         {
+            if (completed)
+                targetsKilled = targetAmount;
             string critName = "Unknown";
             if (this.targetCreature.Index >= 0)
                 critName = ChallengeTools.IGT.Translate(ChallengeTools.creatureNames[this.targetCreature.Index]);
@@ -167,14 +183,16 @@ namespace ExpeditionsExpanded
         public override int Points()
         {
             int points = 0;
-            if (targetCreature == CreatureTemplate.Type.RedLizard)
+            if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite)
+                points = 16;
+            else if (targetCreature == CreatureTemplate.Type.RedLizard)
                 points = 34;
             else if (targetCreature == CreatureTemplate.Type.RedCentipede)
-                points = 38;
-            else if (targetCreature == CreatureTemplate.Type.DaddyLongLegs)
                 points = 46;
+            else if (targetCreature == CreatureTemplate.Type.DaddyLongLegs)
+                points = 26;
             else if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture)
-                points = 66;
+                points = 68;
 
             return points * targetAmount * (this.hidden ? 2 : 1);
         }

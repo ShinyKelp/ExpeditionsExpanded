@@ -10,20 +10,21 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class GourmetChallenge : Challenge
+    public class GourmetChallenge : Challenge, IChallengeHooks
     {
         int targetAmount;
-        HashSet<AbstractPhysicalObject.AbstractObjectType> eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>();
-
-        public GourmetChallenge()
+        HashSet<string> eatenEdibleTypes = new HashSet<string>();
+        ~GourmetChallenge()
+        {
+            eatenEdibleTypes.Clear();
+        }
+        public void ApplyHooks()
         {
             On.Player.ObjectEaten += Player_ObjectEaten;
         }
-
-        ~GourmetChallenge()
+        public void RemoveHooks()
         {
             On.Player.ObjectEaten -= Player_ObjectEaten;
-            eatenEdibleTypes.Clear();
         }
 
         private void Player_ObjectEaten(On.Player.orig_ObjectEaten orig, Player self, IPlayerEdible edible)
@@ -32,23 +33,26 @@ namespace ExpeditionsExpanded
             {
                 if (!completed)
                 {
-                    if (edible is PhysicalObject physObj)
+                    string eatenType = "";
+                    if (edible is Creature creature)
+                        eatenType = creature.abstractCreature.creatureTemplate.type.value;
+                    else if (edible is PhysicalObject physObj)
+                        eatenType = physObj.abstractPhysicalObject.type.value;
+                    
+                    if (!eatenEdibleTypes.Contains(eatenType))
                     {
-                        AbstractPhysicalObject.AbstractObjectType eatenType = physObj.abstractPhysicalObject.type;
-                        if (!eatenEdibleTypes.Contains(eatenType))
-                        {
-                            eatenEdibleTypes.Add(eatenType);
-                            if (eatenEdibleTypes.Count == targetAmount)
-                                CompleteChallenge();
-                            UpdateDescription();
-                        }
+                        eatenEdibleTypes.Add(eatenType);
+                        if (eatenEdibleTypes.Count == targetAmount)
+                            CompleteChallenge();
+                        UpdateDescription();
                     }
-
+                    
+                    
                 }
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -61,7 +65,7 @@ namespace ExpeditionsExpanded
             return new GourmetChallenge
             {
                 targetAmount = (int)Mathf.Floor(ExpeditionData.challengeDifficulty * 12) + 3,
-                eatenEdibleTypes = new HashSet<AbstractPhysicalObject.AbstractObjectType>()
+                eatenEdibleTypes = new HashSet<string>()
             };
         }
 
@@ -72,13 +76,6 @@ namespace ExpeditionsExpanded
 
         public override string ToString()
         {
-            string[] eatenTypesArray = new string[eatenEdibleTypes.Count];
-            int i = 0;
-            foreach (AbstractPhysicalObject.AbstractObjectType type in eatenEdibleTypes.ToArray())
-            {
-                eatenTypesArray[i] = "><" + type.value;
-                i++;
-            }
             string saveString = string.Concat(
                 new string[]
                 {
@@ -90,13 +87,13 @@ namespace ExpeditionsExpanded
                     "><",
                     this.hidden ? "1" : "0",
                     "><",
-                    this.revealed ? "1" : "0"
+                    this.revealed ? "1" : "0",
                 }
                 );
 
-            foreach (AbstractPhysicalObject.AbstractObjectType type in eatenEdibleTypes.ToArray())
+            foreach (string type in eatenEdibleTypes.ToArray())
             {
-                saveString = saveString + "><" + type.value;
+                saveString = saveString + "><" + type;
             }
             return saveString;
 
@@ -114,17 +111,15 @@ namespace ExpeditionsExpanded
 
                 if (array.Length > 4)
                     for (int i = 4; i < array.Length; i++)
-                        eatenEdibleTypes.Add(new AbstractPhysicalObject.AbstractObjectType(array[i]));
+                        eatenEdibleTypes.Add(array[i]);
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 this.targetAmount = 5;
                 this.completed = this.hidden = this.revealed = false;
             }
             this.UpdateDescription();
-
-
         }
 
         public override void UpdateDescription()

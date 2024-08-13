@@ -11,20 +11,8 @@ namespace ExpeditionsExpanded
 {
    public class ApexMasterChallenge : Challenge
     {
-        enum ApexMasterTargets
-        {
-            TrainLizard,
-            ScavengerKing,
-            HunterLongLegs
-        }
-        public CreatureTemplate.Type targetCreature;
-        public ApexMasterChallenge()
-        {
-        }
 
-        ~ApexMasterChallenge()
-        {
-        }
+        public CreatureTemplate.Type targetCreature;
 
         public override bool RespondToCreatureKill()
         {
@@ -33,10 +21,16 @@ namespace ExpeditionsExpanded
 
         public override void CreatureKilled(Creature crit, int playerNumber)
         {
-            if (crit.abstractCreature.creatureTemplate.type == targetCreature)
+            if (!completed)
             {
-                CompleteChallenge();
-                UpdateDescription();
+                if (crit.abstractCreature.creatureTemplate.type == targetCreature)
+                {
+                    if (targetCreature == CreatureTemplate.Type.KingVulture &&
+                        !crit.abstractCreature.superSizeMe)
+                        return;
+                    CompleteChallenge();
+                    UpdateDescription();
+                }
             }
         }
 
@@ -44,26 +38,19 @@ namespace ExpeditionsExpanded
         {
             CreatureTemplate.Type chosenType;
             System.Random r = new System.Random();
-            int select = 1;
-            select = r.Next(0, 3);
-            switch ((ApexMasterTargets)select)
+
+            List<CreatureTemplate.Type> candidateTypes = new List<CreatureTemplate.Type>()
             {
-                case ApexMasterTargets.TrainLizard:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.TrainLizard;
-                    break;
-                case ApexMasterTargets.ScavengerKing:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerKing;
-                    break;
-                case ApexMasterTargets.HunterLongLegs:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.HunterDaddy;
-                    break;
-                default:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.TrainLizard;
-                    break;
-            }
+                CreatureTemplate.Type.KingVulture,
+                MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.TrainLizard,
+                MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerKing,
+                MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.HunterDaddy
+            };
+            if (ExpeditionsExpandedMod.HasRedHorror)
+                candidateTypes.Add(new CreatureTemplate.Type("RedHorrorCenti"));
             return new ApexMasterChallenge
             {
-                targetCreature = chosenType
+                targetCreature = candidateTypes[UnityEngine.Random.Range(0, candidateTypes.Count)]
             };
         }
 
@@ -100,7 +87,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 targetCreature = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.TrainLizard;
             }
             
@@ -109,8 +96,12 @@ namespace ExpeditionsExpanded
         public override void UpdateDescription()
         {
             string critName = "Unknown";
-            if(targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.HunterDaddy)
+            if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.HunterDaddy)
                 critName = ChallengeTools.IGT.Translate("Hunter Long Legs");
+            else if (targetCreature == CreatureTemplate.Type.KingVulture)
+                critName = ChallengeTools.IGT.Translate("Albino King Vulture");
+            else if (ExpeditionsExpandedMod.HasRedHorror && targetCreature == new CreatureTemplate.Type("RedHorrorCenti"))
+                critName = "Red Horror";
             else if (this.targetCreature.Index >= 0)
                 critName = ChallengeTools.IGT.Translate(StaticWorld.GetCreatureTemplate(targetCreature).name);
 
@@ -127,13 +118,16 @@ namespace ExpeditionsExpanded
         public override int Points()
         {
             int points = 0;
+            if (targetCreature == CreatureTemplate.Type.KingVulture)
+                points = 160;
             if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
-                points = 150;
+                points = 170;
             else if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.HunterDaddy)
-                points = 175;
+                points = 150;
             else if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerKing)
-                points = 200;
-
+                points = 180;
+            else if (targetCreature.value == "RedHorrorCenti")
+                points = 175;
             return points * (this.hidden ? 2 : 1);
         }
 

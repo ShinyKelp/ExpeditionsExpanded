@@ -10,22 +10,20 @@ using UnityEngine;
 
 namespace ExpeditionsExpanded
 {
-    public class GatekeeperChallenge : Challenge
+    public class GatekeeperChallenge : Challenge, IChallengeHooks
     {
         int crossedGates = 0;
         public int minKarmaRequirement, totalGates;
-        public GatekeeperChallenge() 
+
+        public void ApplyHooks()
         {
             On.OverWorld.GateRequestsSwitchInitiation += OverWorld_GateRequestsSwitchInitiation;
-            ExpeditionsExpandedMod.OnHibernated += GatekeeperChallenge_OnHibernated;
+            ECEUtilities.OnHibernated += GatekeeperChallenge_OnHibernated;
         }
-
-
-
-        ~GatekeeperChallenge()
+        public void RemoveHooks()
         {
             On.OverWorld.GateRequestsSwitchInitiation -= OverWorld_GateRequestsSwitchInitiation;
-            ExpeditionsExpandedMod.OnHibernated -= GatekeeperChallenge_OnHibernated;
+            ECEUtilities.OnHibernated -= GatekeeperChallenge_OnHibernated;
         }
 
         private void GatekeeperChallenge_OnHibernated()
@@ -58,7 +56,7 @@ namespace ExpeditionsExpanded
                 }
             }catch(Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
             }
             finally
             {
@@ -126,7 +124,7 @@ namespace ExpeditionsExpanded
             }
             catch (Exception e)
             {
-                ExpeditionsExpandedMod.ExpLogger.LogError(e);
+                ECEUtilities.ExpLogger.LogError(e);
                 minKarmaRequirement = 3;
                 totalGates = 2;
                 completed = hidden = revealed = false;
