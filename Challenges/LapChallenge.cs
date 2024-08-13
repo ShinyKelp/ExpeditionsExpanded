@@ -180,7 +180,7 @@ namespace ExpeditionsExpanded
                 if (ECEUtilities.DiedLastSession())
                     enteredLastCycle = false;
 
-                if (ECEUtilities.IsRegionForbidden("LapChallenge", targetRegion))
+                if (ECEUtilities.IsRegionForbidden("Lap", targetRegion, "RegionLap"))
                     targetRegion = SelectRegion();
 
             }

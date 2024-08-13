@@ -124,7 +124,7 @@ namespace ExpeditionsExpanded
                 this.completed = (array[2] == "1");
                 this.hidden = (array[3] == "1");
                 this.revealed = (array[4] == "1");
-                if (ECEUtilities.IsRegionForbidden("FishtankChallenge", targetRegion))
+                if (ECEUtilities.IsRegionForbidden("Fishtank", targetRegion))
                     targetRegion = SelectRegion();
             }
             catch (Exception e)
