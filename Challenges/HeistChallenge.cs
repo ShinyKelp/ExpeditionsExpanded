@@ -251,7 +251,7 @@ namespace ExpeditionsExpanded
                 this.description = ChallengeTools.IGT.Translate("Steal from two tolls without killing, paying or chieftain [<score>/2]").Replace("<score>", (heistedRegion == "_" ? "0" : (completed ? "2" : "1")));
             }
             else
-                this.description = ChallengeTools.IGT.Translate("Steal from AngryNoodle_OnHibernated scav toll without killing, paying or chieftain");
+                this.description = ChallengeTools.IGT.Translate("Steal from a scav toll without killing, paying or chieftain");
             base.UpdateDescription();
         }
         public override int Points()

@@ -19,7 +19,7 @@ public class SampleChallenge : Challenge, IRegionSpecificChallenge, IChallengeHo
     List<string> baseApplicableRegions = SlugcatStats.SlugcatStoryRegions(ExpeditionData.slugcatPlayer);    //This is your base list of regions. It can have a hardcoded default value, but don't read/modify it directly in your code.
     public List<string> ApplicableRegions                                                                   //This is what you actually want to use in your code.
     { 
-        get => return baseApplicableRegions;
+        get => baseApplicableRegions;
         set 
         {
             baseApplicableRegions.Clear();
@@ -65,17 +65,17 @@ public class SampleChallenge : Challenge, IRegionSpecificChallenge, IChallengeHo
     public void ApplyHooks()
     {
         On.Player.ObjectEaten += Player_ObjectEaten;
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied += AllPlayersDied;  //Called when all players die in expedition.
+        ExpeditionsExpanded.ECEUtilities.OnAllPlayersDied += AllPlayersDied;  //Called when all players die in expedition.
                                                                                         //Recommended to use for progress reset on death.
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated += Hibernated;  //Called when player hibernates successfully.
+        ExpeditionsExpanded.ECEUtilities.OnHibernated += Hibernated;  //Called when player hibernates successfully.
                                                                                 //Recommended to use for progress or variable reset on cycle end.
     }
     //Remove all your hook listeners here
     public void RemoveHooks()
     {
         On.Player.ObjectEaten -= Player_ObjectEaten;
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnHibernated -= Hibernated;
-        ExpeditionsExpanded.ExpeditionsExpandedMod.OnAllPlayersDied -= AllPlayersDied;
+        ExpeditionsExpanded.ECEUtilities.OnHibernated -= Hibernated;
+        ExpeditionsExpanded.ECEUtilities.OnAllPlayersDied -= AllPlayersDied;
     }
 
 
@@ -99,7 +99,7 @@ public class SampleChallenge : Challenge, IRegionSpecificChallenge, IChallengeHo
         }
         catch (Exception e)
         {
-            ExpeditionsExpanded.ExpeditionsExpandedMod.ExpLogger.LogError(e);   //ExpeditionsExpanded provides a Logger if you don't want to
+            ExpeditionsExpanded.ECEUtilities.ExpLogger.LogError(e);   //ExpeditionsExpanded provides a Logger if you don't want to
         }                                                                       //have an actual plugin in your mod.
         finally
         {
@@ -181,7 +181,7 @@ public class SampleChallenge : Challenge, IRegionSpecificChallenge, IChallengeHo
 
         return new SampleChallenge
         {
-            goalToReach = thisToReach
+            goalToReach = thisToReach,
             targetRegion = regionAcronym
         };
     }

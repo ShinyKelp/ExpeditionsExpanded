@@ -53,7 +53,7 @@ namespace ExpeditionsExpanded
         {
             if (!completed && crit.abstractCreature.creatureTemplate.type == targetCreature)
             {
-                if (crit.abstractCreature.creatureTemplate.type == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite)
+                if (crit.abstractCreature.creatureTemplate.type == DLCSharedEnums.CreatureTemplateType.ScavengerElite)
                     if (crit.room.world.game.session.creatureCommunities.LikeOfPlayer(CreatureCommunities.CommunityID.Scavengers, -1, playerNumber) > 0.25f)
                         return;
                 targetsKilled++;
@@ -80,7 +80,7 @@ namespace ExpeditionsExpanded
             switch ((ApexExpertTargets)select)
             {
                 case ApexExpertTargets.EliteScavenger:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite;
+                    chosenType = DLCSharedEnums.CreatureTemplateType.ScavengerElite;
                     multiplier = 8f;
                     break;
                 case ApexExpertTargets.DaddyLongLegs:
@@ -96,7 +96,7 @@ namespace ExpeditionsExpanded
                     multiplier = 4f;
                     break;
                 case ApexExpertTargets.MirosVulture:
-                    chosenType = MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture;
+                    chosenType = DLCSharedEnums.CreatureTemplateType.MirosVulture;
                     extra = -5;
                     multiplier = 8f;
                     break;
@@ -183,7 +183,7 @@ namespace ExpeditionsExpanded
         public override int Points()
         {
             int points = 0;
-            if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.ScavengerElite)
+            if (targetCreature == DLCSharedEnums.CreatureTemplateType.ScavengerElite)
                 points = 16;
             else if (targetCreature == CreatureTemplate.Type.RedLizard)
                 points = 34;
@@ -191,7 +191,7 @@ namespace ExpeditionsExpanded
                 points = 46;
             else if (targetCreature == CreatureTemplate.Type.DaddyLongLegs)
                 points = 26;
-            else if (targetCreature == MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.MirosVulture)
+            else if (targetCreature == DLCSharedEnums.CreatureTemplateType.MirosVulture)
                 points = 68;
 
             return points * targetAmount * (this.hidden ? 2 : 1);

@@ -199,7 +199,7 @@ namespace ExpeditionsExpanded
 
         public override void UpdateDescription()
         {
-            this.description = ChallengeTools.IGT.Translate("Enter <region> twice in " + (doubleCycle ? "two cycles, no backtracks." : "one cycle.")).Replace
+            this.description = ChallengeTools.IGT.Translate("Enter <region> twice " + (doubleCycle ? "within two cycles, no backtracks." : "in one cycle.")).Replace
                 ("<region>", ChallengeTools.IGT.Translate(Region.GetRegionFullName(targetRegion, ExpeditionData.slugcatPlayer)));
             base.UpdateDescription();
         }

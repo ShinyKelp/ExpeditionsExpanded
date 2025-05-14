@@ -59,7 +59,7 @@ namespace ExpeditionsExpanded
         {
             return new StudentChallenge
             {
-                targetAmount = (int)Mathf.Floor(ExpeditionData.challengeDifficulty * 22) + 2,
+                targetAmount = (int)Mathf.Floor(ExpeditionData.challengeDifficulty * 15) + 2,
                 givenObjects = new HashSet<AbstractPhysicalObject.AbstractObjectType>()
             };
         }

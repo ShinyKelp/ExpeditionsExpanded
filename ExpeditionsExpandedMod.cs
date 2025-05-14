@@ -33,7 +33,7 @@ using IL.MoreSlugcats;
 
 namespace ExpeditionsExpanded
 {
-    [BepInPlugin("ShinyKelp.ExpeditionsExpanded", "ExpeditionsExpanded", "0.1.1")]
+    [BepInPlugin("ShinyKelp.ExpeditionsExpanded", "ExpeditionsExpanded", "0.3.1")]
 
     public class ExpeditionsExpandedMod : BaseUnityPlugin
     {
@@ -48,6 +48,7 @@ namespace ExpeditionsExpanded
             On.RainWorld.OnModsInit += RainWorldOnOnModsInit;
         }
 
+        private const int CHALLENGES_PER_PAGE = 12;
         private bool IsInit;
         private bool challengesHooked = false;
         private void RainWorldOnOnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
@@ -56,7 +57,6 @@ namespace ExpeditionsExpanded
             try
             {
                 if (IsInit) return;
-
                 On.Expedition.ChallengeOrganizer.RandomChallenge += ChallengeOrganizer_RandomChallenge;
                 On.Menu.ExpeditionMenu.Singal += ExpeditionMenu_Singal;
                 On.Menu.FilterDialog.ctor += FilterDialog_ctor;
@@ -69,11 +69,9 @@ namespace ExpeditionsExpanded
                 On.RainWorldGame.ShutDownProcess += RainWorldGame_ShutDownProcess;
                 //On.StoryGameSession.ctor += StoryGameSession_ctor;
                 On.ProcessManager.PostSwitchMainProcess += ProcessManager_PostSwitchMainProcess;
-
                 IL.Menu.FilterDialog.ctor += FilterDialog_ctorIL;
                 IL.MoreSlugcats.SlugNPCAI.AteFood += SlugNPCAI_AteFood;
                 //On.Expedition.ExpeditionCoreFile.FromString += ExpeditionCoreFile_FromString; //This is used for debugging ONLY
-
                 foreach(ModManager.Mod mod in ModManager.ActiveMods)
                 {
                     if (mod.id == "ShinyKelp.ShinyShieldMask")
@@ -90,7 +88,7 @@ namespace ExpeditionsExpanded
                 ECEUtilities.Critters.Add(CreatureTemplate.Type.EggBug);
                 ECEUtilities.Critters.Add(CreatureTemplate.Type.LanternMouse);
                 ECEUtilities.Critters.Add(CreatureTemplate.Type.Snail);
-                ECEUtilities.Critters.Add(MoreSlugcats.MoreSlugcatsEnums.CreatureTemplateType.Yeek);
+                ECEUtilities.Critters.Add(DLCSharedEnums.CreatureTemplateType.Yeek);
 
                 if (!Directory.Exists(Custom.RootFolderDirectory() + "/ExpeditionsExpanded"))
                     Directory.CreateDirectory(Custom.RootFolderDirectory() + "/ExpeditionsExpanded");
@@ -101,7 +99,7 @@ namespace ExpeditionsExpanded
                 ECEUtilities.ReadUserRegionFilters();
 
                 ECEUtilities.ExpLogger = Logger;
-
+                Debug.Log("FINISH INIT.");
                 IsInit = true;
             }
             catch (Exception ex)
@@ -186,8 +184,8 @@ namespace ExpeditionsExpanded
                 if (message.StartsWith("EXP_CH_FILTER_"))
                 {
 
-                    int previousStartingIndex = currentPageIndex * 10;
-                    for (int i = previousStartingIndex; i < previousStartingIndex + 10; ++i)
+                    int previousStartingIndex = currentPageIndex * CHALLENGES_PER_PAGE;
+                    for (int i = previousStartingIndex; i < previousStartingIndex + CHALLENGES_PER_PAGE; ++i)
                     {
                         if (i >= self.checkBoxes.Count)
                             break;
@@ -209,8 +207,8 @@ namespace ExpeditionsExpanded
                         if (currentPageIndex == totalPages)
                             currentPageIndex = 0;
                     }
-                    int nextStartingIndex = currentPageIndex * 10;
-                    for (int i = 0; i < 10; ++i)
+                    int nextStartingIndex = currentPageIndex * CHALLENGES_PER_PAGE;
+                    for (int i = 0; i < CHALLENGES_PER_PAGE; ++i)
                     {
                         if (i + nextStartingIndex >= self.checkBoxes.Count)
                             break;
@@ -230,22 +228,22 @@ namespace ExpeditionsExpanded
             orig(self, sender, message);
         }
 
-        //Only keep up to 10 dividers
+        //Only keep up to CHALLENGES_PER_PAGE dividers
         private void FilterDialog_ctorIL(MonoMod.Cil.ILContext il)
         {
             ILCursor c = new ILCursor(il);
 
             //if (j == list.Count - 1)
             c.GotoNext(MoveType.After,
-                  x => x.MatchLdloc(6),
+                  x => x.MatchLdloc(8),
                 x => x.MatchLdloc(3),
                 x => x.Match(OpCodes.Callvirt),
                 x => x.MatchLdcI4(1),
                 x => x.MatchSub());
 
-            //if (j > list.Count - 1)
+            //if (j < list.Count - 1)
             c.GotoNext(MoveType.After,
-                x => x.MatchLdloc(6),
+                x => x.MatchLdloc(8),
                 x => x.MatchLdloc(3),
                 x => x.Match(OpCodes.Callvirt),
                 x => x.MatchLdcI4(1),
@@ -253,7 +251,7 @@ namespace ExpeditionsExpanded
                 );
             c.EmitDelegate<Func<int, int>>((count) =>
             {
-                return Math.Min(count, 10);
+                return Math.Min(count, CHALLENGES_PER_PAGE);
             });
         }
 
@@ -269,26 +267,28 @@ namespace ExpeditionsExpanded
             self.pages[0].subObjects.Add(buttonLeft);
             self.pages[0].subObjects.Add(buttonRight);
 
-            challengeCheckboxPositions = new Vector2[10];
-            challengeLabelPositions = new Vector2[10];
-            for (int i = 0; i < 10; ++i)
+            challengeCheckboxPositions = new Vector2[CHALLENGES_PER_PAGE];
+            challengeLabelPositions = new Vector2[CHALLENGES_PER_PAGE];
+            for (int i = 0; i < CHALLENGES_PER_PAGE; ++i)
             {
-                challengeCheckboxPositions[i] = self.checkBoxes[i].pos;
-                challengeLabelPositions[i] = self.challengeTypes[i].pos;
+                challengeCheckboxPositions[i] = new Vector2(793f, 588f - 37f * (float)i);
+                challengeLabelPositions[i] = new Vector2(553f, 601f - 37f * (float)i);
+                self.checkBoxes[i].pos = challengeCheckboxPositions[i];
+                self.challengeTypes[i].pos = challengeLabelPositions[i];
             }
-            for (int i = 10; i < self.checkBoxes.Count; ++i)
+            for (int i = CHALLENGES_PER_PAGE; i < self.checkBoxes.Count; ++i)
             {
-                self.checkBoxes[i].pos.x = -150;
+                self.checkBoxes[i].pos.x = -250;
                 self.checkBoxes[i].inactive = true;
-                self.challengeTypes[i].pos.x = -150;
+                self.challengeTypes[i].pos.x = -250;
             }
             /*
-            while (self.dividers.Count > 10)
+            while (self.dividers.Count > CHALLENGES_PER_PAGE)
             {
-                self.container.RemoveChild(self.dividers[10]);
-                self.dividers.RemoveAt(10);
+                self.container.RemoveChild(self.dividers[CHALLENGES_PER_PAGE]);
+                self.dividers.RemoveAt(CHALLENGES_PER_PAGE);
             }*/
-            totalPages = Mathf.CeilToInt(((float)self.challengeTypes.Count) / 10f);
+            totalPages = Mathf.CeilToInt(((float)self.challengeTypes.Count) / (float)CHALLENGES_PER_PAGE);
             currentPageIndex = 0;
         }
 

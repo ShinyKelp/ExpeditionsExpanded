@@ -164,7 +164,7 @@ namespace ExpeditionsExpanded
         public override void UpdateDescription()
         {
 
-            this.description = ChallengeTools.IGT.Translate("Offer <total_amount> critters alive to AngryNoodle_OnHibernated Long Legs [<current_amount>/<total_amount>]"
+            this.description = ChallengeTools.IGT.Translate("Offer <total_amount> critters alive to a Long Legs [<current_amount>/<total_amount>]"
                 .Replace("<total_amount>", totalOffers.ToString())
                 .Replace("<current_amount>", currentOffers.ToString()));
 
